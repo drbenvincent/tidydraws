@@ -54,8 +54,15 @@ def _datatree_group_to_lazy(dt, group: str) -> pl.LazyFrame:
         raise KeyError(f"Group '{group}' not found in DataTree.")
 
     ds = dt.children[group].to_dataset()
-    # Convert xarray Dataset to pandas DataFrame, then to Polars LazyFrame
-    df = ds.to_dataframe().reset_index()
+    
+    # If there are no data variables, we just want the coordinates.
+    # to_dataframe() requires at least one data variable; otherwise it fails.
+    if len(ds.data_vars) == 0:
+        df = ds.coords.to_dataframe().reset_index()
+    else:
+        # Convert xarray Dataset to pandas DataFrame, then to Polars LazyFrame
+        df = ds.to_dataframe().reset_index()
+        
     return pl.from_pandas(df).lazy()
 
 def _align_dims(frames: List[pl.LazyFrame], chain_dim: str = "chain", draw_dim: str = "draw") -> pl.LazyFrame:
@@ -152,3 +159,117 @@ def spread_draws(
         frames.append(lf)
 
     return _align_dims(frames, chain_dim=chain_dim, draw_dim=draw_dim)
+
+
+def add_epred_draws(
+    dt: xr.DataTree,
+    newdata,
+    var_name,
+    idata_group="predictions",
+    constant_data_group="predictions_constant_data",
+    join_on="obs_ind",
+) -> pl.LazyFrame:
+    """
+    Join posterior predictive draws to a covariate DataFrame.
+    
+    The newdata frame is the *left* table. Draws are attached to it. This avoids
+    the denormalisation problem where coefficient values are duplicated for every
+    obs_ind — the join goes in the right direction.
+    
+    Parameters
+    ----------
+    dt : xr.DataTree
+        ArviZ DataTree object (xarray.DataTree) containing prediction samples.
+    newdata : pl.DataFrame | pd.DataFrame | None
+        Covariate grid. If None, attempts to read from dt[constant_data_group].
+        If the group is not found, raises a clear error directing user to pass
+        newdata explicitly.
+    var_name : str
+        Name of the predictive variable to extract (e.g., "mu"). Supports
+        nested specifications like "mu[time, group]" if the variable has
+        multiple dimensions.
+    idata_group : str
+        InferenceData group containing the predictive draws ("predictions",
+        "posterior_predictive", or custom). Default "predictions".
+    constant_data_group : str
+        InferenceData group name for the covariate grid that aligns with the
+        prediction draws. Default "predictions_constant_data". Set this parameter
+        if your DataTree uses a different naming convention.
+    join_on : str | list[str]
+        Column(s) to join newdata to the draws on. Default "obs_ind".
+    
+    Returns
+    -------
+    pl.LazyFrame
+        Tidy LazyFrame with columns: chain, draw, [join_on cols], [covariate cols], var_name
+        One row per (chain, draw, obs_ind).
+    
+    Examples
+    --------
+    # Basic usage — newdata read from dt
+    pred_df = add_epred_draws(dt, newdata=None, var_name="mu")
+    # → columns: chain, draw, obs_ind, x, group, mu
+    # → 4 × 1000 × 80 = 320,000 rows
+    
+    # Filter before collecting — only group 0
+    pred_df.filter(pl.col("group") == 0).collect()
+    # → 4 × 1000 × 20 = 80,000 rows materialised
+    
+    # Provide custom newdata (e.g., a finer grid)
+    fine_grid = pl.DataFrame({"x": np.linspace(0, 20, 200), "group": ...})
+    add_epred_draws(dt, newdata=fine_grid, var_name="mu")
+    """
+
+    # Check if group exists in the DataTree
+    if idata_group not in dt.children:
+        raise KeyError(f"Group '{idata_group}' not found in DataTree.")
+
+    # Extract the predictive draws for the specified variable
+    ds = dt.children[idata_group].to_dataset()
+    if var_name not in ds.data_vars:
+        raise KeyError(f"Variable '{var_name}' not found in group '{idata_group}'.")
+
+    # Get the DataArray for the variable
+    da = ds[var_name]
+
+    # Convert to LazyFrame
+    df = da.to_dataframe().reset_index()
+    pred_lazy = pl.from_pandas(df).lazy()
+
+    # Handle newdata parameter
+    if newdata is None:
+        # Check if constant_data_group exists
+        if constant_data_group not in dt.children:
+            raise KeyError(
+                f"constant_data_group '{constant_data_group}' not found in DataTree. "
+                "Pass newdata explicitly or check your DataTree structure."
+            )
+
+        # Read the constant data group
+        const_lazy = _datatree_group_to_lazy(dt, constant_data_group)
+
+        # Join pred_lazy with const_lazy on join_on
+        result = pred_lazy.join(const_lazy, on=join_on, how="left")
+
+    else:
+        # Convert newdata to LazyFrame if needed
+        if not isinstance(newdata, pl.LazyFrame):
+            # Check if it's a pandas DataFrame or Polars DataFrame
+            try:
+                import pandas as pd
+                if isinstance(newdata, pd.DataFrame):
+                    newdata = pl.from_pandas(newdata).lazy()
+                else:
+                    # Try to convert to polars, might be a Polars DataFrame
+                    newdata = pl.from_pandas(newdata.to_pandas()).lazy()
+            except AttributeError:
+                # If it fails, just try pl.from_pandas directly as a fallback
+                try:
+                    newdata = pl.from_pandas(newdata).lazy()
+                except Exception:
+                    raise TypeError("newdata must be either None, a pl.DataFrame, pd.DataFrame, or pl.LazyFrame.")
+
+        # Join pred_lazy with newdata on join_on
+        result = pred_lazy.join(newdata, on=join_on, how="left")
+
+    return result
