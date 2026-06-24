@@ -132,10 +132,12 @@ def spread_draws(
         ArviZ DataTree object (xarray.DataTree) from PyMC sampling.
     *var_specs : str
         Variable specifications in the form "var_name" for scalar variables,
-        or "var_name[dim1, dim2]" for array variables. The bracketed names must
-        match coordinate names in the InferenceData dataset.
+        or "var_name[dim1, dim2, ...]" for array variables. Supports nested/multi-dimensional
+        specifications. The bracketed dimension names must match coordinate names in the
+        InferenceData dataset.
     group : str
-        Which InferenceData group to extract from. Default "posterior".
+        Which InferenceData group to extract from (e.g., "posterior", "prior").
+        Default "posterior".
     chain_dim, draw_dim : str
         Names of the chain and draw dimensions.
 
@@ -162,8 +164,13 @@ def spread_draws(
     # → columns: chain, draw, groups, beta, sigma
     # → 4 × 1000 × 4 = 16,000 rows; sigma repeated per group (explicit and expected)
 
-    # Different groups
+    # Different groups (prior vs posterior)
     spread_draws(dt, "beta[groups]", group="prior")
+    # → extract prior draws for beta
+
+    # Nested dimensions
+    spread_draws(dt, "gamma[time, group]")
+    # → columns: chain, draw, time, group, gamma
     """
 ```
 
@@ -171,8 +178,10 @@ def spread_draws(
 
 - Infers dimension names automatically from xarray coordinates — no hard-coding
 - Multiple variables sharing the same dims are extracted together (no fan-out join)
-- Variables with different dims trigger an explicit cross-join, with a logged warning
+- Variables with different dims trigger an explicit cross-join, with a logged warning (e.g., scalar `sigma` broadcast across `beta[groups]`)
 - The string syntax `"beta[groups]"` directly mirrors R's `tidybayes::spread_draws(model, beta[group])`
+- Supports any group in the DataTree (posterior, prior, custom); no special casing
+- Always returns `pl.LazyFrame` — call `.collect()` when ready to materialize
 
 ---
 
@@ -183,7 +192,7 @@ Join posterior predictive draws to a covariate grid.
 ```python
 def add_epred_draws(
     dt: xr.DataTree,
-    newdata: pl.DataFrame | pd.DataFrame,
+    newdata: pl.DataFrame | pd.DataFrame | None,
     var_name: str,
     idata_group: str = "predictions",
     constant_data_group: str = "predictions_constant_data",
@@ -200,16 +209,21 @@ def add_epred_draws(
     ----------
     dt : xr.DataTree
         ArviZ DataTree object (xarray.DataTree) containing prediction samples.
-    newdata : pl.DataFrame | pd.DataFrame
-        Covariate grid. If None, reads from idata.{constant_data_group}.
+    newdata : pl.DataFrame | pd.DataFrame | None
+        Covariate grid. If None, attempts to read from dt[constant_data_group].
+        If the group is not found, raises a clear error directing user to pass
+        newdata explicitly.
     var_name : str
-        Name of the predictive variable to extract (e.g., "mu").
+        Name of the predictive variable to extract (e.g., "mu"). Supports
+        nested specifications like "mu[time, group]" if the variable has
+        multiple dimensions.
     idata_group : str
-        InferenceData group containing the predictive draws ("predictions" or
-        "posterior_predictive").
+        InferenceData group containing the predictive draws ("predictions",
+        "posterior_predictive", or custom). Default "predictions".
     constant_data_group : str
-        InferenceData group containing the covariate grid that aligns with the
-        prediction draws.
+        InferenceData group name for the covariate grid that aligns with the
+        prediction draws. Default "predictions_constant_data". Set this parameter
+        if your DataTree uses a different naming convention.
     join_on : str | list[str]
         Column(s) to join newdata to the draws on. Default "obs_ind".
 
@@ -242,10 +256,64 @@ def add_epred_draws(
 - Returns a LazyFrame; no data is loaded until `.collect()` is called
 - Deliberately does **not** attach parameter-space variables (`beta`, `intercept`) — those are for `spread_draws()`
 - Works with both `predictions` and `posterior_predictive` groups
+- If `newdata=None` and the `constant_data_group` is not found in the DataTree, raises a clear error with guidance
+- Supports nested var_name specifications (e.g., `var_name="mu[time, group]"`)
 
 ---
 
-### 5.3 lets-plot Helper Layer
+### 5.3 `spread_draws_compare()` — Comparing Posterior and Prior
+
+Helper function for stacking draws from multiple groups (e.g., posterior vs. prior) into a single frame for comparison plots.
+
+```python
+def spread_draws_compare(
+    dt: xr.DataTree,
+    *var_specs: str,
+    groups: list[str] = ["posterior", "prior"],
+    group_name: str = "source",
+) -> pl.LazyFrame:
+    """
+    Extract and stack draws from multiple groups (e.g., posterior and prior).
+
+    Calls spread_draws() for each group, adds a column identifying the source group,
+    and concatenates the results into a single LazyFrame for easy comparison.
+
+    Parameters
+    ----------
+    dt : xr.DataTree
+        ArviZ DataTree object.
+    *var_specs : str
+        Variable specifications (as for spread_draws()).
+    groups : list[str]
+        Which groups to extract and stack. Default ["posterior", "prior"].
+    group_name : str
+        Name of the column identifying the source group. Default "source".
+
+    Returns
+    -------
+    pl.LazyFrame
+        Stacked draws with an additional column (group_name) indicating source.
+
+    Example
+    -------
+    # Extract posterior and prior for side-by-side forest plots
+    compare_df = spread_draws_compare(dt, "beta[groups]", 
+                                       groups=["posterior", "prior"])
+    # → columns: chain, draw, groups, beta, source
+    # → source ∈ {"posterior", "prior"}
+    """
+```
+
+**Key behaviour:**
+
+- Calls `spread_draws()` separately for each group, then stacks with `pl.concat()`
+- Adds a grouping column (`source` by default) identifying which group each row came from
+- Useful for prior vs. posterior comparison plots
+- Returns LazyFrame; no data materialized until `.collect()`
+
+---
+
+### 5.4 lets-plot Helper Layer
 
 These are thin helpers, not a new plotting package. They accept a Polars LazyFrame (or
 collected DataFrame) and return lets-plot layer objects.
@@ -396,6 +464,11 @@ This table is pure prediction-space data. No duplication of parameters.
 
 **Key principle:** Documentation and examples are the primary deliverable. Code implementation is minimal; most effort goes into comprehensive, annotated examples.
 
+**Documentation Quality Standards:** When building docs, apply the `educational-narrative` and `figure-excellence` skills to ensure:
+- Clear, progressive narrative flow that builds understanding step-by-step
+- High-quality, publication-ready figures and visualizations
+- Examples that teach concepts, not just show syntax
+
 ### Documentation Structure (Quarto + Great Docs)
 
 - **User Guide** (`docs/user_guide/`): Ordered tutorials (numeric prefixes) covering core workflows
@@ -498,7 +571,7 @@ result.filter(pl.col("group") == 2).collect()
 
 ---
 
-## 8. Complete Usage Example
+## 8b. Complete Usage Example
 
 **With lets-plot backend:**
 
@@ -579,7 +652,60 @@ pred_draws = td.add_epred_draws(dt, newdata=None, var_name="mu").collect()
 
 ---
 
-## 9. Dependencies
+## 9. Testing Strategy
+
+Testing focuses on correctness of the data transformation layer, with emphasis on row counts, dimension inference, and lazy evaluation semantics.
+
+### Test Levels
+
+| Level | Focus | Tool | Examples |
+| --- | --- | --- | --- |
+| **Unit Tests** | Row count correctness, dimension inference, variable spec parsing | `pytest` + synthetic DataTrees | `spread_draws("beta[groups]")` → 4 × 1000 × 4 rows exactly |
+| **Integration Tests** | End-to-end extraction + validation against source DataTree | `pytest` + real PyMC samples | Load model.nc, extract, verify values match original |
+| **Lazy Semantics Tests** | Confirm LazyFrame behavior, predicate pushdown | `pytest` + Polars introspection | Filter before `.collect()`, verify only needed data loaded |
+
+### Test Coverage (v0.1)
+
+**Row count validation (primary):**
+- Scalar variables (e.g., `"sigma"`)
+- Single-dim arrays (e.g., `"beta[groups]"`)
+- Multi-dim arrays (e.g., `"gamma[time, group]"`)
+- Cross-dim joins (scalar + array, e.g., `"beta[groups]", "sigma"`)
+- Verify no duplication, no missing rows
+
+**Numerical spot-check:**
+- Extract 2–3 parameters, compare to direct xarray indexing
+- Not exhaustive; sampling approach to catch value corruption bugs
+
+**LazyFrame semantics:**
+- Confirm return type is `pl.LazyFrame`, not eager `pl.DataFrame`
+- Verify `.collect()` required before operations expecting eager data
+
+**Group parameter:**
+- Test extraction from `"posterior"`, `"prior"` groups
+- Test invalid group name raises clear error
+
+**add_epred_draws:**
+- Join correctness (newdata rows preserved)
+- Constant data group auto-detection vs. explicit parameter
+- Clear error when constant data group missing and newdata=None
+
+**spread_draws_compare:**
+- Correct stacking and group column creation
+- No data loss or duplication during concatenation
+
+### Test Data
+
+**Synthetic models** (fast, deterministic):
+- Minimal xarray.DataTree objects constructed directly
+- Controlled dimensions and coordinate names
+- Predictable row counts for validation
+
+**Real samples** (optional, v0.2+):
+- Small PyMC models (~2 chains, 100 draws) for integration tests
+- Verification that extraction matches manual xarray operations
+
+---
 
 ### Core Dependencies
 
@@ -670,55 +796,54 @@ The shift to ArviZ 1.0 impacts tidydraws in these ways:
 
 ---
 
-## 9. Milestones
+## 12. Milestones
 
 ### v0.1 — Data Layer + Core Docs (core value)
 
 **Code:**
 - [ ] `_datatree_group_to_lazy()` — generic DataTree group → Polars LazyFrame
-- [ ] `_parse_var_spec()` — string spec parser (`"beta[groups]"`)
-- [ ] `spread_draws()` — single and multi-dim variable extraction
-- [ ] `add_epred_draws()` — prediction draws joined to covariate grid
-- [ ] Tests: correctness of row counts (no duplication), column names, lazy semantics
+- [ ] `_parse_var_spec()` — string spec parser supporting nested dims (e.g., `"beta[groups, time]"`)
+- [ ] `spread_draws()` — extract parameter draws, supporting any group (posterior, prior, etc.)
+- [ ] `spread_draws_compare()` — helper for stacking and comparing multiple groups (e.g., posterior vs. prior)
+- [ ] `add_epred_draws()` — prediction draws joined to covariate grid, with configurable constant data group
+- [ ] Tests: row count validation (primary), numerical spot-checks, lazy semantics, group parameter, error handling
 
 **Docs:**
-- [ ] `docs/user_guide/01-quickstart.qmd` — 5-min intro
-- [ ] `docs/user_guide/02-parameter-space.qmd` — `spread_draws()` + `stat_pointinterval()`
-- [ ] `docs/user_guide/03-prediction-space.qmd` — `add_epred_draws()` + `stat_hdi()`
-- [ ] `docs/examples/linear-regression.qmd` — Real working model
-- [ ] API reference auto-generated and linked
+- [ ] `docs/user_guide/01-quickstart.qmd` — 5-min intro with both posterior and prior extraction
+- [ ] `docs/user_guide/02-parameter-space.qmd` — Forest plots, prior vs. posterior comparison
+- [ ] `docs/user_guide/03-prediction-space.qmd` — Posterior predictive fits and credible intervals
+- [ ] `docs/user_guide/04-migration-from-arviz.qmd` — Migration guide from ArviZ imperative approach
+- [ ] `docs/examples/linear-regression.qmd` — Worked example with group-level effects
+- [ ] API reference auto-generated and linked to guide sections
 - [ ] README with quick start
-- [ ] GitHub Pages site deployed
+- [ ] GitHub Pages site deployed via Great Docs
 
 ### v0.2 — Plotting Stats Layer + Backend Parity
 
 **Code:**
-- [ ] `stat_hdi()` — HDI ribbon layer (lets-plot + plotnine)
+- [ ] `stat_hdi()` — HDI credible interval ribbon layer (lets-plot + plotnine)
 - [ ] `stat_eti()` — Equal-tailed interval option (ArviZ 1.0 default)
 - [ ] `stat_median_line()` — median line layer
 - [ ] `stat_pointinterval()` — point + interval for forest plots
 - [ ] Backend dispatch logic for lets-plot and plotnine
 
 **Docs:**
-- [ ] `docs/user_guide/04-migration-from-arviz.qmd` — How to replace ArviZ plots
-- [ ] `docs/user_guide/05-backends.qmd` — Parallel lets-plot and plotnine examples
-- [ ] `docs/examples/hierarchical-model.qmd` — Multi-level example (both backends)
-- [ ] Notebook: full worked example mirroring blog post, plotnine + lets-plot side-by-side
+- [ ] `docs/user_guide/05-backends.qmd` — Side-by-side lets-plot and plotnine examples
+- [ ] `docs/examples/hierarchical-model.qmd` — Multi-level example demonstrating both backends
+- [ ] Backend-agnostic examples showing data layer works with any plotting library
 
 ### v0.3 — Advanced Features & Comprehensive Docs
 
 **Code:**
-- [ ] Handle `posterior_predictive` group in addition to `predictions`
-- [ ] Handle `prior` group in `spread_draws()`
+- [ ] Support `posterior_predictive` group in addition to `predictions`
 - [ ] Support `observed_data` passthrough for posterior predictive checks
 - [ ] `add_predicted_draws()` — full predictive draws including observation noise
-- [ ] Streaming collection support for very large models (ArviZ 1.0 compat)
+- [ ] Streaming collection support for very large models
 
 **Docs:**
-- [ ] `docs/user_guide/06-lazy-evaluation.qmd` — Filtering, predicate pushdown
-- [ ] `docs/examples/bayesian-workflow.qmd` — Full pipeline (prior, posterior, PPC)
-- [ ] Migration guide for users coming from ArviZ `plot_posterior()`, etc.
-- [ ] Troubleshooting guide (common errors, dimension mismatches)
+- [ ] `docs/user_guide/06-lazy-evaluation.qmd` — Filtering strategies, predicate pushdown
+- [ ] `docs/examples/bayesian-workflow.qmd` — Full pipeline with prior predictive, posterior, posterior predictive
+- [ ] Troubleshooting guide (dimension mismatches, group name errors, etc.)
 
 ### Future (post-v1)
 
@@ -729,10 +854,7 @@ The shift to ArviZ 1.0 impacts tidydraws in these ways:
 
 ---
 
-## 12. Open Questions
-
-
-| Question                                                                                     | Options                                                                    | Recommendation                                                                                                    |
+## 13. Open Questions                                                                                                    |
 | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | Package name                                                                                 | `tidydraws`, `pydraws`, `bayesframe`, `posteriorframe`                    | `**tidydraws**` — clearest analogy to tidybayes                                                                   |
 | Publish under PyMC Labs umbrella?                                                            | Standalone repo vs. PyMC Labs org                                         | Start standalone (own repo); propose to PyMC Labs once v0.2 is stable                                             |
