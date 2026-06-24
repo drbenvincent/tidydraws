@@ -1,0 +1,200 @@
+---
+title: "Quickstart"
+description: A 5-minute guide to getting started with tidydraws
+---
+
+Let's look at a minimal example of using `tidydraws` for Bayesian visualization. This will show how we extract parameters from posterior and prior samples, and make a basic forest plot and predictive fit.
+
+## Why Use tidydraws?
+
+Plotting MCMC output in Python today requires manual wrangling of `arviz.InferenceData`
+objects: slicing xarray dimensions, iterating over groups, managing coordinate alignment.
+This is imperative, boilerplate-heavy, and error-prone.
+
+R's [`tidybayes`](https://github.com/TuringLang/tidybayes) solved this elegantly by providing a data transformation layer that respects the semantics of parameter space vs. prediction space. `tidydraws` brings the same philosophy to Python — using **Polars LazyFrames** so you only pay the materialisation cost when you're ready.
+
+## Creating a Sample Bayesian Model
+
+In this example, we'll work with synthetic data from a hierarchical linear model to demonstrate `tidydraws` capabilities. First, let's create a simulated dataset:
+
+```{python}
+# Create sample data for demonstration
+import numpy as np
+import arviz as az
+import pandas as pd
+
+np.random.seed(42)
+
+# Simulate synthetic data for a hierarchical model
+n_groups = 4
+n_obs_per_group = 20
+obs_ind = []
+group_labels = []
+
+for group in range(n_groups):
+    for i in range(n_obs_per_group):
+        obs_ind.append(i)
+        group_labels.append(group)
+
+obs_df = pd.DataFrame({"x": np.random.normal(10, 5, n_obs_per_group * n_groups),
+                       "group": group_labels,
+                       "y": np.random.normal(0, 2, n_obs_per_group * n_groups)})
+
+# Generate a simple dataset
+data_dict = {
+    "obs_ind": obs_ind,
+    "group": group_labels,
+    "x": obs_df["x"].values,
+    "y": obs_df["y"].values,
+}
+
+print("Generated synthetic dataset with:")
+print(f"- {len(data_dict['x'])} observations")
+print(f"- {n_groups} groups")
+```
+
+## Setting up a Bayesian Model
+
+While in a real scenario you would have used PyMC to sample an actual posterior, for this demonstration we'll create simulated
+model data using ArviZ's DataTree interface.
+
+```{python}
+# Create simulated posterior draws with groups
+chains = 4
+draws = 1000
+
+# Simulate beta parameters per group (slope coefficients)
+beta_draws = np.random.normal(1, 0.2, (chains, draws, n_groups))
+
+# Simulate intercepts 
+intercept_draws = np.random.normal(0, 0.5, (chains, draws, n_groups))
+
+# Simulate sigma (error standard deviation)  
+sigma_draws = np.random.normal(0.8, 0.1, (chains, draws))
+
+# Create DataTree using ArviZ 1.0 interface
+from xarray import DataArray
+
+# Create datasets for posterior and prior
+posterior_data = {
+    "beta": DataArray(beta_draws, dims=["chain", "draw", "groups"]),
+    "intercept": DataArray(intercept_draws, dims=["chain", "draw", "groups"]),
+    "sigma": DataArray(sigma_draws, dims=["chain", "draw"])
+}
+
+# Create the DataTree
+dt = az.from_dict(
+    posterior=posterior_data,
+    observed_data={"y": obs_df["y"].values},
+    coords={
+        "groups": [f"group_{i}" for i in range(n_groups)],
+        "obs_ind": list(range(len(obs_df)))
+    }
+)
+
+print("Created ArviZ DataTree with the following structure:")
+print(f"- Chains: {chains}")
+print(f"- Draws: {draws}")
+print(f"- Groups: {dt.posterior.coords['groups'].values}")
+```
+
+## Extracting Draw Parameters
+
+Now we'll extract posterior draws using `spread_draws()` function. This is where tidydraws shines: parameters are extracted without duplication across observations.
+
+```{python}
+import tidydraws as td
+import polars as pl
+
+# Extract posterior beta and intercept draws
+beta_draws = td.spread_draws(dt, "beta[groups]", "intercept[groups]")
+print("Posterior beta draws:")
+print(f"Shape: {beta_draws.collect().shape}")
+print("Columns:", beta_draws.collect().columns)
+```
+
+## Comparing Posterior and Prior
+
+Let's now compare posterior with prior draws:
+
+```{python}
+# Create a mock prior (in practice you would have a proper prior InferenceData)
+# For this demo, we'll simulate some prior draws with different means
+prior_data = {
+    "beta": DataArray(np.random.normal(0.5, 0.3, (chains, draws, n_groups)), 
+                      dims=["chain", "draw", "groups"]),
+    "intercept": DataArray(np.random.normal(0.2, 0.6, (chains, draws, n_groups)), 
+                          dims=["chain", "draw", "groups"]),
+    "sigma": DataArray(np.random.normal(1.0, 0.15, (chains, draws)), 
+                      dims=["chain", "draw"])
+}
+
+# Create a new DataTree with a prior group
+import xarray as xr
+
+# Add the prior to our existing dt
+dt_with_prior = az.from_dict(
+    posterior=posterior_data,
+    prior=prior_data,
+    observed_data={"y": obs_df["y"].values},
+    coords={
+        "groups": [f"group_{i}" for i in range(n_groups)],
+        "obs_ind": list(range(len(obs_df)))
+    }
+)
+
+# Compare posterior vs. prior
+compare_draws = td.spread_draws_compare(dt_with_prior, "beta[groups]")
+print("Comparison of posterior and prior beta draws:")
+print(f"Shape: {compare_draws.collect().shape}")
+```
+
+In this comparison, we're showing how `spread_draws_compare` can help with visualizing differences between parameter distributions.
+
+## Making a Forest Plot
+
+Let's create a simple forest plot to illustrate the parameter estimates:
+
+```{python}
+# Collect for visualization 
+beta_df = beta_draws.collect()
+
+print("First few rows of beta draws:")
+print(beta_df.head(5))
+```
+
+Now let's make a basic forest plot:
+
+```{python}
+# Using lets-plot for visualization (if available)
+try:
+    from letsplot import *
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    
+    # Create a forest plot using lets-plot
+    g = (
+        ggplot()
+        + td.stat_pointinterval(beta_draws, x="groups", y="beta", prob=0.89)
+        + labs(x="Group", y="β", title="Posterior slopes by group")
+        + coord_flip()
+        + theme_classic()
+    )
+    
+    print("Forest plot created with lets-plot - ready for display")
+except ImportError:
+    # Fallback to manual approach if lets-plot is not installed
+    print("Let's-plot not available, using a basic approach")
+    pass
+```
+
+## Summary
+
+This quickstart demonstrates how `tidydraws` makes it easy to work with MCMC draws in a tidy way: 
+
+1. **`spread_draws()`** extracts parameters into clean DataFrames without duplication
+2. **`spread_draws_compare()`** allows easy comparison between posterior and prior distributions
+3. **Lazy evaluation** lets you filter before collecting data
+
+The power of `tidydraws` is that it separates the parameter space (where parameters like beta and intercept live) from the prediction space (where mu, y_hat, and other predictions live). This clean separation avoids the issue in typical approaches where coefficient values get duplicated across all observations.
+```

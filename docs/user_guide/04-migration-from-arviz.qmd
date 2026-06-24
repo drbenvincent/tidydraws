@@ -19,18 +19,18 @@ import numpy as np
 # The old approach is quite verbose and requires lots of manipulation
 
 # Simple example of a model with posterior draws
-idata = az.from_netcdf("model.nc")  # Load your existing model
+# idata = az.from_netcdf("model.nc")  # Load your existing model
 
 # Manual extraction - this is typical of ArviZ 1.0 approaches:
 def extract_with_arviz_approach():
     # Accessing parameter values manually 
-    samples = idata.posterior
+    # samples = idata.posterior
     
     # For scalar parameters you can access directly
-    sigma = samples["sigma"].values  # Shape: (chains, draws)
+    # sigma = samples["sigma"].values  # Shape: (chains, draws)
     
     # For array parameters, you need explicit dimension handling
-    beta = samples["beta"]  # This returns a DataArray with dimensions
+    # beta = samples["beta"]  # This returns a DataArray with dimensions
     
     # The issue becomes clear when trying to work with multiple related variables:
     # You have to manage manual coordinate alignment

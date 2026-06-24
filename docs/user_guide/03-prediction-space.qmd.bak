@@ -62,13 +62,6 @@ prediction_coords = {
 
 # Create DataTree with observations and model structure 
 # (This block has some build complications in current ArviZ version, so it's not run during docs building)
-
-# Commented out due to arviz API compatibility issues:
-# dt = az.from_dict(
-#     posterior=model_data,
-#     observed_data={"y": y_draws[:, 0, :].flatten()}, # Just use one draw for demonstration
-#     coords=prediction_coords
-# )
 model_data = {
     # Parameters (parameter space)
     "intercept": DataArray(intercept_vals, dims=["chain", "draw", "groups"]),
@@ -86,6 +79,17 @@ constant_data = {
     "group": group_labels,
     "obs_ind": obs_ind
 }
+
+# Skip this section to avoid ArviZ API incompatibility with build
+
+# dt = az.from_dict(
+	#     posterior=model_data,
+	#     observed_data={"y": y_draws[:, 0, :].flatten()}, # Just use one draw for demonstration
+	#     coords=prediction_coords
+    posterior=model_data,
+    observed_data={"y": y_draws[:, 0, :].flatten()}, # Just use one draw for demonstration
+    coords=prediction_coords
+)
 ```
 
 ## Joining Prediction Data to Covariates
@@ -127,12 +131,12 @@ The most interesting and practical part is the `add_epred_draws()` function, whi
 try:
     # First, let's see what this looks like with the right DataTree structure
     
-    # Let's create a proper prediction DataTree (commented out due to build complications)
-    # pred_draws = td.add_epred_draws(dt, newdata=None, var_name="mu")
+    # Let's create a proper prediction DataTree
+    pred_draws = td.add_epred_draws(dt, newdata=None, var_name="mu")
     
-    print("Prediction draws extraction works as:")
-    print("If dt contained proper prediction data, we could extract: ")
-    print("pred_draws = td.add_epred_draws(dt, newdata=newdata_df, var_name='mu')")
+    print("Prediction draws extracted:")
+    print(f"Shape: {pred_draws.collect().shape}")
+    print("Columns:", pred_draws.collect().columns)
     
 except Exception as e:
     print(f"No prediction data available in current structure: {e}")
@@ -180,7 +184,7 @@ def show_lazy_filtering():
     print("\n--- LAZY EVALUATION EXAMPLE ---")
     
     # Create a large prediction dataframe (simulated)
-    # pred_frames = [td.add_epred_draws(dt, newdata=None, var_name="mu") for _ in range(2)]
+    pred_frames = [td.add_epred_draws(dt, newdata=None, var_name="mu") for _ in range(2)]
     
     print("We can apply filters before collecting:")
     print("Example: filter to group 0 only")
@@ -287,3 +291,4 @@ The separation of parameter and prediction spaces in `tidydraws` offers several 
 5. **Compositional**: You can compose operations without materializing large intermediate datasets
 
 This design matches the semantic distinction described in `tidydraws`' architecture: **parameter space** (where `beta[groups]`, `intercept[groups]`, and `sigma` live) vs. **prediction space** (where `mu`, `y_hat`, and similar variables live).
+```

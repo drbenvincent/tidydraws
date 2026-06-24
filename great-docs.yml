@@ -1,0 +1,58 @@
+# Great Docs Configuration
+# See https://posit-dev.github.io/great-docs/user-guide/configuration.html
+
+# Package ---------------------------------------------------------------------
+module: tidydraws
+display_name: tidydraws
+
+# Explicit GitHub repo so source links and the changelog fail loudly if the
+# repo ever moves, rather than silently mis-resolving.
+repo: drbenvincent/tidy-draws
+github_style:
+  source: true
+
+# Docstring parser used throughout the package.
+parser: numpy
+
+# Use runtime introspection for accurate docs (package must be importable;
+# `uv sync` installs it editable). Falls back to static analysis if import fails.
+dynamic: true
+
+# Content ---------------------------------------------------------------------
+# README is the landing page; set to "user_guide" to use the first guide page.
+homepage: index
+
+# Narrative tutorials. Files are auto-discovered and ordered by their numeric
+# filename prefix (01-, 02-, ...).
+user_guide: docs/user_guide
+
+# Custom sections beyond the user guide. The directory basename ("examples")
+# becomes the section slug in the built site.
+sections:
+  - title: Examples
+    dir: docs/examples
+    navbar_after: User Guide
+
+# API Reference ---------------------------------------------------------------
+reference:
+  - title: Functions
+    desc: Extract and join tidy draws from ArviZ DataTrees.
+    contents:
+      - spread_draws
+      - add_epred_draws
+      - spread_draws_compare
+
+# Appearance ------------------------------------------------------------------
+navbar_style: mint
+dark_mode_toggle: true
+
+# SEO -------------------------------------------------------------------------
+# Public GitHub Pages URL. Required for sitemap.xml, canonical links, and
+# social-card absolute URLs.
+seo:
+  canonical:
+    base_url: https://drbenvincent.github.io/tidy-draws/
+
+# Jupyter kernel for executable code cells in .qmd pages (incl. auto-generated
+# API reference). Override per-page in frontmatter if needed.
+jupyter: python3

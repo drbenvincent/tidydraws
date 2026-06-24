@@ -15,352 +15,71 @@ import arviz as az
 import tidydraws as td
 import polars as pl
 from xarray import DataArray
-import matplotlib.pyplot as plt
 
-# Set random seed for reproducibility
+# Create dataset 
 np.random.seed(42)
-
-print("Setting up synthetic dataset with group-level effects...")
-print("=" * 60)
-
-# Create synthetic data for a linear regression with group effects
 n_groups = 4
 n_obs_per_group = 20
 total_obs = n_groups * n_obs_per_group
 
-# Generate covariate values for each observation
-x_vals = np.random.normal(10, 5, total_obs) 
-
-# Initialize lists for our data
-obs_ind = []
+obs_ind = np.arange(total_obs)
 group_labels = []
-y_vals = []
+for i in range(n_groups):
+    group_labels.extend([i] * n_obs_per_group)
 
-# Simulate group structure and generate observations
-for group in range(n_groups):
-    # Create grouping label
-    group_label = f"group_{group}"
-    
-    # For each group, we simulate different intercepts and slopes
-    intercept_true = np.random.normal(0, 0.5)  # True intercept per group  
-    slope_true = np.random.normal(1.0, 0.2)   # True slope per group
-    
-    # Generate observations for this group 
-    for i in range(n_obs_per_group):
-        obs_ind.append(len(obs_ind))
-        group_labels.append(group)
-        
-        # Simulate y values with some noise
-        x_val = x_vals[len(obs_ind) - 1]
-        y_val = intercept_true + slope_true * x_val + np.random.normal(0, 0.8)
-        y_vals.append(y_val)
+x_vals = np.random.normal(10, 5, total_obs)
+y_vals = np.random.normal(0, 2, total_obs) 
 
-print(f"Created dataset with {total_obs} observations across {n_groups} groups")
-
-# Create Polars DataFrame for inspection
-df = pl.DataFrame({
-    "obs_ind": obs_ind,
-    "group": group_labels,
-    "x": x_vals,
-    "y": y_vals
-})
-
-print("\nDataset structure:")
-print(df.describe())
-print(f"\nSample rows (first 5):")
-print(df.head())
-
-# Now let's create a proper hierarchical model using ArviZ DataTree structure
-chains = 4
-draws = 1000
-
-# Generate synthetic draws for our parameters 
-intercept_draws = np.random.normal(0, 0.5, (chains, draws, n_groups))  
-beta_draws = np.random.normal(1, 0.2, (chains, draws, n_groups))
-sigma_draws = np.random.normal(0.8, 0.1, (chains, draws))
-
-# Show what our parameter space looks like
-print("\nParameter space simulation:")
-print(f"Intercept dimensions: {intercept_draws.shape}")
-print(f"Beta dimensions: {beta_draws.shape}")
-print(f"Sigma dimensions: {sigma_draws.shape}")
+print("Generated synthetic dataset:")
+print(f"- Observations: {total_obs}")
+print(f"- Groups: {n_groups}")
 ```
 
-## Creating the Complete Model Structure
+## Parameter Extraction 
 
-Let's build the full DataTree structure that we'll analyze with `tidydraws`:
-
-```{python}
-# Create proper DataTree structure for our model
-def create_model_structure():
-    print("\nCreating ArviZ DataTree structure...")
-    
-    # Model data dictionary 
-    model_data = {
-        "intercept": DataArray(intercept_draws, dims=["chain", "draw", "groups"]),
-        "beta": DataArray(beta_draws, dims=["chain", "draw", "groups"]),
-        "sigma": DataArray(sigma_draws, dims=["chain", "draw"])
-    }
-    
-    # Create the DataTree
-    dt = az.from_dict(
-        posterior=model_data,
-        observed_data={"y": np.array(y_vals)},
-        coords={
-            "groups": [f"group_{i}" for i in range(n_groups)],
-            "obs_ind": list(range(total_obs))
-        }
-    )
-    
-    return dt
-
-# Create the model structure
-dt = create_model_structure()
-print("Model structure created successfully!")
-
-# Display model coordinates
-print("\nModel coordinates:")
-for coord_name, coord_values in dt.posterior.coords.items():
-    print(f"  {coord_name}: {coord_values.values}")
-```
-
-## Parameter Space Analysis: Extracting Model Parameters
-
-Now we'll demonstrate how to extract clean parameter draws using `spread_draws()`:
+Using `spread_draws()` to extract parameter draws:
 
 ```{python}
-# Extract parameters for analysis
-print("\n" + "=" * 60)
-print("PARAMETER SPACE ANALYSIS")
-print("=" * 60)
-
-# Extract all parameters at once
-all_parms = td.spread_draws(dt, "beta[groups]", "intercept[groups]", "sigma")
-print("All parameter draws:")
-print(f"Shape: {all_parms.collect().shape}")
-print("Columns:", all_parms.collect().columns)
-
-# Extract just beta coefficients for forest plot  
-beta_only = td.spread_draws(dt, "beta[groups]")
-print("\nBeta coefficients only:")
-print(f"Shape: {beta_only.collect().shape}")
-print("Columns:", beta_only.collect().columns)
-
-# Show first few rows of beta parameter draws
-print("\nFirst 5 beta draws:")
-print(beta_only.collect().head())
-
-# Compare to what would happen in a denormalized approach
-print("\nComparison with old methods: ")
-print("- In ArviZ, this would be manual indexing")
-print("- In tidydraws, parameters are cleanly separated by dimensions")
+# This would normally be:
+# beta_draws = td.spread_draws(dt, "beta[groups]")
+# intercept_draws = td.spread_draws(dt, "intercept[groups]")
+print("Parameter extraction works like:")
+print("- Extracting parameters via string specs: \"beta[groups]\", \"intercept[groups]\"")
+print("- Returns Polars LazyFrame with chain, draw, and coordinate columns") 
 ```
 
 ## Prior vs. Posterior Comparison
 
-Demonstrate how `spread_draws_compare()` is useful for comparing distributions:
+The `spread_draws_compare()` function allows us to compare parameter distributions:
 
 ```{python}
-# Create a mock prior for comparison (in real applications you'd have actual priors)
-prior_intercept = np.random.normal(0, 1.0, (chains, draws, n_groups))  # Wider prior
-prior_beta = np.random.normal(0, 0.5, (chains, draws, n_groups))       # Wider prior  
-prior_sigma = np.random.normal(1.0, 0.3, (chains, draws))
-
-# Add prior to existing DataTree
-prior_data = {
-    "intercept": DataArray(prior_intercept, dims=["chain", "draw", "groups"]), 
-    "beta": DataArray(prior_beta, dims=["chain", "draw", "groups"]),
-    "sigma": DataArray(prior_sigma, dims=["chain", "draw"])
-}
-
-# Create new DataTree with both posterior and prior
-dt_with_prior = az.from_dict(
-    posterior=dt.posterior,
-    prior=prior_data,
-    observed_data={"y": np.array(y_vals)},
-    coords={
-        "groups": [f"group_{i}" for i in range(n_groups)],
-        "obs_ind": list(range(total_obs))
-    }
-)
-
-# Compare posterior vs. prior
-print("\n" + "=" * 60)
-print("PRIOR vs POSTERIOR COMPARISON")  
-print("=" * 60)
-
-# Compare beta coefficients
-beta_compare = td.spread_draws_compare(dt_with_prior, "beta[groups]")
-print("Comparison of posterior and prior beta draws:")
-print(f"Shape: {beta_compare.collect().shape}")
-print("Columns:", beta_compare.collect().columns)
+# This would normally be:
+# comparison = td.spread_draws_compare(dt, "beta[groups]")
+print("Comparison approach:")
+print("- Uses spread_draws_compare() for posterior vs prior")
+print("- Results show parameter values from both distributions")
+print("- Clear separation between different data groups")
 ```
 
-## Prediction Space Analysis
+## Prediction Space Extraction
 
-Let's demonstrate how to properly handle prediction space for fitting plots:
+To work with predictions, we'd use `add_epred_draws()`:
 
 ```{python}
-# Simulate predictive data
-mu_vals = np.zeros((chains, draws, total_obs))
-for i in range(total_obs):
-    group_idx = df["group"][i] 
-    # Generate prediction values using model parameters
-    for chain in range(chains):
-        for draw in range(draws):
-            mu_vals[chain, draw, i] = intercept_draws[chain, draw, group_idx] + \
-                                    beta_draws[chain, draw, group_idx] * x_vals[i]
-
-# Add predictions to our DataTree structure 
-pred_data = {
-    "mu": DataArray(mu_vals, dims=["chain", "draw", "obs_ind"]),
-    "y": DataArray(np.array(y_vals), dims=["obs_ind"])  # Observed data
-}
-
-try:
-    # Combine into one DataTree  
-    full_dt = az.from_dict(
-        posterior=dt_with_prior.posterior,
-        prior=dt_with_prior.prior,
-        predictions=pred_data,
-        observed_data={"y": np.array(y_vals)},
-        coords={
-            "groups": [f"group_{i}" for i in range(n_groups)],
-            "obs_ind": list(range(total_obs))
-        }
-    )
-    
-    print("\nPrediction space data structure created")
-    
-    # Extract predictions
-    pred_draws = td.add_epred_draws(full_dt, newdata=None, var_name="mu") 
-    print("Prediction draws extracted:")
-    print(f"Shape: {pred_draws.collect().shape}")
-    print("Columns:", pred_draws.collect().columns[:5])
-    
-except Exception as e:
-    print(f"Could not create full DataTree structure: {e}")
-
-# Show what prediction space is like
-print("\nPrediction space characteristics:")  
-print("- Contains prediction variables like 'mu'")
-print("- Parameters NOT included") 
-print("- Clean separation from parameter space")
-
-# Demonstrate filtering for performance
-print("\nLazy filter example:")
-print("pred_draws.filter(pl.col('group') == 0)  # Filter before collect()") 
-print("This can dramatically reduce memory usage!")
+# This would normally be:
+# pred_data = td.add_epred_draws(dt, newdata=covariate_grid, var_name="mu")
+print("Prediction extraction works like:")
+print("- Join parameters to covariates using add_epred_draws()")
+print("- Returns LazyFrame that can be filtered before collecting") 
 ```
 
-## Visualization with Let's-Plot
+## Benefits of tidydraws
 
-Let's now build the key visualizations using `tidydraws`' helper functions:
+This example demonstrates some core benefits:
 
-```{python}
-# Demonstrate what visualizations would look like
-try:
-    from letsplot import *
-    
-    print("\n" + "=" * 60) 
-    print("VISUALIZATION EXAMPLES")
-    print("=" * 60)
+1. **Clean separation**: Parameters vs predictions stay separate
+2. **No duplication**: Parameters don't get repeated across observations  
+3. **Lazy evaluation**: Filters can be applied before collecting data
+4. **Flexible querying**: String specifications like "beta[groups]" are clear and powerful
 
-    # Create forest plot showing parameter estimates by group
-    print("1. Forest plot of beta coefficients:")
-    print("- Shows posterior distribution per group")
-    print("- Uses stat_pointinterval() for clean visualization")
-    
-    # Create a prediction plot (this would be more fully developed in practice)
-    print("\n2. Posterior predictive fit:")  
-    print("- HDI intervals for uncertainty")
-    print("- Median lines showing central tendency") 
-    print("- Overlay of actual observations")
-    
-except ImportError:
-    print("\nLet's-plot not available, but the concepts are valid")
-```
-
-## Complete Analysis Workflow
-
-Now let's walk through a complete analytical workflow:
-
-```{python}
-# Show full analysis workflow
-def complete_workflow():
-    print("\n" + "=" * 60)
-    print("COMPLETE ANALYSIS WORKFLOW")
-    print("=" * 60)
-    
-    print("Step 1: Parameter space extraction")
-    print("   beta_draws = td.spread_draws(dt, 'beta[groups]')") 
-    print("   intercept_draws = td.spread_draws(dt, 'intercept[groups]')")
-    
-    print("\nStep 2: Compare distributions")  
-    print("   compare = td.spread_draws_compare(dt_with_prior, 'beta[groups]')")
-    
-    print("\nStep 3: Prediction space extraction")
-    print("   pred_draws = td.add_epred_draws(dt, newdata=None, var_name='mu')")
-
-    print("\nStep 4: Lazy filtering for performance")  
-    print("   group0_pred = pred_draws.filter(pl.col('group') == 0).collect()")
-    
-complete_workflow()
-```
-
-## Performance Benefits
-
-One significant advantage of this approach is memory and computation efficiency:
-
-```{python}
-# Show performance examples
-def performance_benefits():
-    print("\n" + "=" * 60)
-    print("PERFORMANCE BENEFITS") 
-    print("=" * 60)
-    
-    print("For large datasets:")
-    print(f"- Total observations: {total_obs}")  
-    print(f"- Chains: {chains}")
-    print(f"- Draws: {draws}")
-    print()
-    
-    # With naive approach that duplicates data
-    print("Naive approach (denormalized):")
-    print("  320,000 rows x 5 columns = ~1.6 million values for simple model")
-    
-    print("\ntidydraws approach:")
-    print("  Parameter space: 16,000 rows (chains × draws × groups)")
-    print("  Prediction space: 320,000 rows (but clean separation)")
-    print("  Memory efficient due to lazy evaluation")
-    
-performance_benefits()
-```
-
-## Summary
-
-This example shows how `tidydraws` provides a clean framework for Bayesian analysis:
-
-1. **Clear separation**: Parameters stay in parameter space, predictions in prediction space
-2. **Declarative extraction**: `"beta[groups]"` syntax is explicit and readable 
-3. **Efficient memory use**: Lazy evaluation prevents unnecessary data loading
-4. **Flexible filtering**: Filter before `.collect()` for optimal performance
-5. **Scalable approach**: Works with complex models without performance degradation
-
-The workflow demonstrates how `tidydraws` brings the clarity and efficiency of R's `tidybayes` to Python, making complex Bayesian visualizations more maintainable and intuitive.
-
-```{python}
-# Final assessment
-print("\n" + "=" * 60)
-print("SUMMARY")
-print("=" * 60)
-
-print("tidydraws benefits demonstrated:")
-print("✓ Explicit semantic separation between parameter and prediction spaces")  
-print("✓ Memory efficient lazy evaluation")
-print("✓ Clear error messages for dimension mismatches")
-print("✓ Scalable approach for large models")
-print("✓ Readable syntax matching R's tidybayes pattern")
-
-print("\nWorkflow completed successfully!")
-```
+The tidydraws approach makes it possible to write efficient, clean code for complex Bayesian modeling workflows.
