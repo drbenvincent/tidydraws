@@ -1,0 +1,219 @@
+---
+title: "Parameter Space"
+description: Deep dive into parameter extraction, string specifications, and prior vs. posterior comparison
+---
+
+So far we've seen basic use of `spread_draws()`, but what if we want to extract parameters that are arrays (have named dimensions), or compare posterior vs. prior distributions?
+Let's go deeper into how `tidydraws` handles parameter space extraction.
+
+## Understanding Variable Specifications
+
+The string specifications in `tidydraws` mirror the approach of R's `tidybayes`, allowing us to specify parameters with their dimensional structure:
+
+```{python}
+import numpy as np
+import arviz as az
+import tidydraws as td
+import polars as pl
+
+# Create a more realistic DataTree with multi-dimensional parameters
+chains = 4
+draws = 1000
+
+# Simulated data with multiple dimensions
+n_groups = 4 
+n_time_points = 3
+
+# Multi-dimensional parameters
+beta_per_group = np.random.normal(1, 0.2, (chains, draws, n_groups))
+gamma_per_time_group = np.random.normal(0.5, 0.15, (chains, draws, n_time_points, n_groups))
+
+# Scalar parameters
+sigma = np.random.normal(0.8, 0.1, (chains, draws))
+
+# Create the DataTree
+from xarray import DataArray
+
+posterior_data = {
+    "beta": DataArray(beta_per_group, dims=["chain", "draw", "groups"]),
+    "gamma": DataArray(gamma_per_time_group, dims=["chain", "draw", "time", "groups"]),
+    "sigma": DataArray(sigma, dims=["chain", "draw"])
+}
+
+dt = az.from_dict(
+    posterior=posterior_data,
+    coords={
+        "groups": [f"group_{i}" for i in range(n_groups)],
+        "time": [f"time_{i}" for i in range(n_time_points)]
+    }
+)
+
+print("DataTree created with:")
+print(f"- {n_groups} groups")
+print(f"- {n_time_points} time points")
+```
+
+## Scalar Parameters vs. Multi-dimensional Arrays
+
+When you specify a scalar parameter, it is extracted as-is:
+
+```{python}
+# Scalar parameter
+sigma_draws = td.spread_draws(dt, "sigma")
+print("Scalar parameter (sigma) extraction:")
+print(f"Shape: {sigma_draws.collect().shape}")
+print("Columns:", sigma_draws.collect().columns)
+```
+
+When you specify an array parameter with named dimensions:
+
+```{python}
+# Array parameter - this automatically infers the dimensions 
+beta_draws = td.spread_draws(dt, "beta[groups]")
+print("Array parameter extraction (beta[groups]):")
+print(f"Shape: {beta_draws.collect().shape}")
+print("Columns:", beta_draws.collect().columns)
+```
+
+## Cross-dimension Joins and Broadcasting
+
+A crucial feature of `tidydraws` is the handling of cross-dimension joins. Let's see how this works:
+
+```{python}
+# Extract both scalar and array parameters - this triggers an automatic cross-join
+mixed_draws = td.spread_draws(dt, "beta[groups]", "sigma")
+print("Cross-dim extraction (beta[groups] + sigma):")
+print(f"Shape: {mixed_draws.collect().shape}")
+print("Columns:", mixed_draws.collect().columns)
+
+# Let's examine a few rows to understand the broadcasting
+print("\nFirst 10 rows:")
+print(mixed_draws.collect().head(10))
+```
+
+When you have parameters with different dimensions, `tidydraws` automatically handles the cross-join by broadcasting scalar parameters across array dimensions. This is a common case that "just works" in `tidydraws`, unlike manual approaches where such joins need to be handled explicitly.
+
+## Prior vs. Posterior Comparison
+
+One of the fundamental use cases in Bayesian analysis is comparing parameters from different distributions. Let's create mock data for a prior distribution:
+
+```{python}
+# Generate prior draws
+prior_data = {
+    "beta": DataArray(np.random.normal(0, 0.5, (chains, draws, n_groups)), 
+                      dims=["chain", "draw", "groups"]),
+    "gamma": DataArray(np.random.normal(0.3, 0.2, (chains, draws, n_time_points, n_groups)), 
+                      dims=["chain", "draw", "time", "groups"]),
+    "sigma": DataArray(np.random.normal(1.0, 0.2, (chains, draws)), 
+                      dims=["chain", "draw"])
+}
+
+# Combine into a single DataTree with both groups
+dt_with_prior = az.from_dict(
+    posterior=posterior_data,
+    prior=prior_data,
+    coords={
+        "groups": [f"group_{i}" for i in range(n_groups)],
+        "time": [f"time_{i}" for i in range(n_time_points)]
+    }
+)
+
+print("DataTree with both posterior and prior")
+```
+
+Now let's compare the posterior and prior distributions:
+
+```{python}
+# Compare beta from posterior vs. prior
+beta_compare = td.spread_draws_compare(dt_with_prior, "beta[groups]")
+print("Posterior vs. Prior comparison of beta:")
+print(f"Shape: {beta_compare.collect().shape}")
+print("Column structure:", beta_compare.collect().columns)
+print("\nFirst few rows:")
+print(beta_compare.collect().head())
+
+# Compare all parameters at once
+all_compare = td.spread_draws_compare(dt_with_prior, "beta[groups]", "sigma", groups=["posterior", "prior"])
+print("\nComparison of both beta and sigma:")
+print(f"Shape: {all_compare.collect().shape}")
+print("Column structure:", all_compare.collect().columns)
+```
+
+## Forest Plots and Visualization
+
+Now let's create a proper forest plot using the `stat_pointinterval` helper functions:
+
+```{python}
+# Let's examine what a forest plot would look like
+beta_draws = td.spread_draws(dt_with_prior, "beta[groups]")
+
+try:
+    from letsplot import *
+    
+    # Create a forest plot comparing posterior and prior
+    g = (
+        ggplot()
+        + td.stat_pointinterval(beta_draws.filter(pl.col("source") == "posterior"), 
+                                x="groups", y="beta", prob=0.89, point_fn=np.median)
+        + labs(x="Group", y="β", title="Posterior and Prior Posterior Slopes by Group")
+    )
+    
+    print("Forest plot generated using lets-plot")
+
+except ImportError:
+    print("Let's-plot not available for this example")
+```
+
+## Understanding Broadcast Join Warnings
+
+When cross-dimension joins occur, `tidydraws` automatically issues a warning to inform you, ensuring transparency:
+
+```{python}
+# Let's show how we might examine the join behavior
+def inspect_join_behavior():
+    print("\n--- JOIN BEHAVIOR INSPECTION ---")
+    mixed_result = td.spread_draws(dt, "beta[groups]", "sigma")
+    
+    # Collect to see shape 
+    result_df = mixed_result.collect()
+    print(f"Mixed draw result - Shape: {result_df.shape}")
+    print("Columns:", result_df.columns)
+    
+    # This shows that:
+    # - beta[groups] gives us 1000 * 4 = 4000 rows 
+    # - sigma is broadcast to all these rows (but only one value per chain/draw combination)
+    # - The result has 4000 rows because that's the full cross-product
+    
+inspect_join_behavior()
+```
+
+## Dimension Inference and Coordinate Names
+
+A key feature of `tidydraws` is automatic dimension inference from xarray coordinates:
+
+```{python}
+# Let's examine the coordinate information available in our DataTree
+print("Available coordinates:")
+for coord_name, coord_values in dt.posterior.coords.items():
+    print(f"  {coord_name}: {coord_values.values}")
+
+# Show that the system understands dimensions correctly
+beta_shape = beta_draws.collect().shape
+sigma_shape = sigma_draws.collect().shape
+
+print(f"\nBeta draw shape (chains × draws × groups): {beta_shape}")
+print(f"Sigma draw shape (chains × draws): {sigma_shape}")
+```
+
+## Benefits of This Approach
+
+The `tidydraws` approach to parameter space extraction has several key advantages:
+
+1. **No Data Duplication**: Unlike approaches where parameters get duplicated across observations, we maintain clean separate frames.
+2. **Automatic Dimension Handling**: The system automatically infers coordinate dimensions from the xarray structure.
+3. **Explicit Cross-Dimension Joins**: When needed, the joins clearly broadcast scalar parameters across array dimensions with warning messages.
+4. **Lazy Evaluation**: Extraction happens lazily so that filtering can occur before materialization.
+5. **Flexible Grouping**: Any group (posterior, prior, custom) works out of the box.
+
+This separation between parameters and predictions allows for clear visualizations while maintaining computational efficiency through lazy evaluation.
+```

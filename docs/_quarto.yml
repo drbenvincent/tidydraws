@@ -1,0 +1,40 @@
+project:
+  type: website
+  output-dir: ../_site
+
+website:
+  title: "tidydraws"
+  home-url: "/"
+  twitter-card: true
+  open-graph: true
+  repo-url: https://github.com/YOURUSER/tidydraws
+  repo-branch: main
+
+  sidebar:
+    style: "floating"
+    contents:
+      - text: "User Guide"
+        menu:
+          - href: user_guide/01-quickstart.qmd
+            title: "Quickstart"
+          - href: user_guide/02-parameter-space.qmd
+            title: "Parameter Space"
+          - href: user_guide/03-prediction-space.qmd
+            title: "Prediction Space"
+          - href: user_guide/04-migration-from-arviz.qmd
+            title: "Migration from ArviZ"
+      - text: "Examples"
+        menu:
+          - href: examples/linear-regression.qmd
+            title: "Linear Regression"
+
+format:
+  html:
+    theme: cosmo
+    toc: true
+
+execute:
+  warning: false
+
+# We should add a custom quarto extension to handle the `stat_*` plotting functions
+# But for now, we'll just have plain markdown/html output
