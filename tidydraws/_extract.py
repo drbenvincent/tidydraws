@@ -40,7 +40,7 @@ def _parse_var_spec(spec: str) -> Tuple[str, List[str]]:
     # Split dimensions by comma and strip whitespace
     # Filter out empty strings to handle "beta[]" which should probably be an error or scalar
     dims = [d.strip() for d in dims_str.split(",") if d.strip()]
-    if not dims and dims_str:
+    if not dims and dims_str is not None:
         # Case like "beta[]"
         raise ValueError(f"Variable specification '{spec}' cannot have empty brackets.")
 
