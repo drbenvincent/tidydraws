@@ -273,3 +273,53 @@ def add_epred_draws(
         result = pred_lazy.join(newdata, on=join_on, how="left")
 
     return result
+
+
+def spread_draws_compare(
+    dt: xr.DataTree,
+    *var_specs: str,
+    groups: list[str] = ["posterior", "prior"],
+    group_name: str = "source",
+) -> pl.LazyFrame:
+    """
+    Extract and stack draws from multiple groups (e.g., posterior and prior).
+
+    Calls spread_draws() for each group, adds a column identifying the source group,
+    and concatenates the results into a single LazyFrame for easy comparison.
+
+    Parameters
+    ----------
+    dt : xr.DataTree
+        ArviZ DataTree object.
+    *var_specs : str
+        Variable specifications (as for spread_draws()).
+    groups : list[str]
+        Which groups to extract and stack. Default ["posterior", "prior"].
+    group_name : str
+        Name of the column identifying the source group. Default "source".
+
+    Returns
+    -------
+    pl.LazyFrame
+        Stacked draws with an additional column (group_name) indicating source.
+
+    Example
+    -------
+    # Extract posterior and prior for side-by-side forest plots
+    compare_df = spread_draws_compare(dt, "beta[groups]", 
+                                       groups=["posterior", "prior"])
+    # → columns: chain, draw, groups, beta, source
+    # → source ∈ {"posterior", "prior"}
+    """
+
+    # Collect results from each group
+    frames = []
+    for group in groups:
+        # Call spread_draws for this group
+        group_frame = spread_draws(dt, *var_specs, group=group)
+        # Add the source group identifier column
+        group_frame = group_frame.with_columns(pl.lit(group).alias(group_name))
+        frames.append(group_frame)
+
+    # Concatenate all frames vertically using diagonal concat
+    return pl.concat(frames, how="diagonal")
