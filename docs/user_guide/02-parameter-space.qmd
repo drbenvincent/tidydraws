@@ -3,220 +3,170 @@ title: "Parameter Space"
 description: Deep dive into parameter extraction, string specifications, and prior vs. posterior comparison
 ---
 
-So far we've seen basic use of `spread_draws()`, but what if we want to extract parameters that are arrays (have named dimensions), or compare posterior vs. prior distributions?
-Let's go deeper into how `tidydraws` handles parameter space extraction.
+The **parameter space** is where your model coefficients live — `beta`, `intercept`, `sigma`, and so on. This page covers how `tidydraws` extracts them into tidy frames and how to plot them with lets-plot. Remember: `tidydraws` only produces the tidy data; the plots are plain lets-plot.
 
-## Understanding Variable Specifications
-
-The string specifications in `tidydraws` mirror the approach of R's `tidybayes`, allowing us to specify parameters with their dimensional structure:
+## Setup
 
 ```{python}
 import numpy as np
 import arviz as az
-import tidydraws as td
 import polars as pl
+import tidydraws as td
+from xarray import DataArray
+from lets_plot import *
 
-# Create a more realistic DataTree with multi-dimensional parameters
-chains = 4
-draws = 1000
+LetsPlot.setup_html()
+```
 
-# Simulated data with multiple dimensions
-n_groups = 4 
-n_time_points = 3
+## Variable Specifications
 
-# Multi-dimensional parameters
-beta_per_group = np.random.normal(1, 0.2, (chains, draws, n_groups))
-gamma_per_time_group = np.random.normal(0.5, 0.15, (chains, draws, n_time_points, n_groups))
+String specs mirror R's tidybayes. A scalar is just its name; an array adds bracketed dimension names. `tidydraws` parses these and infers coordinates from the `DataTree`.
 
-# Scalar parameters
+```{python}
+np.random.seed(7)
+chains, draws = 4, 500
+n_groups, n_time = 4, 3
+
+beta = np.random.normal(1.0, 0.2, (chains, draws, n_groups))
+gamma = np.random.normal(0.5, 0.15, (chains, draws, n_time, n_groups))
 sigma = np.random.normal(0.8, 0.1, (chains, draws))
 
-# Create the DataTree
-from xarray import DataArray
-
-posterior_data = {
-    "beta": DataArray(beta_per_group, dims=["chain", "draw", "groups"]),
-    "gamma": DataArray(gamma_per_time_group, dims=["chain", "draw", "time", "groups"]),
-    "sigma": DataArray(sigma, dims=["chain", "draw"])
-}
-
 dt = az.from_dict(
-    {"posterior": posterior_data},
-    coords={
-        "groups": [f"group_{i}" for i in range(n_groups)],
-        "time": [f"time_{i}" for i in range(n_time_points)]
-    },
-    dims={
-        "beta": ["groups"],
-        "gamma": ["time", "groups"],
-    }
+    {"posterior": {
+        "beta": DataArray(beta, dims=["chain", "draw", "groups"]),
+        "gamma": DataArray(gamma, dims=["chain", "draw", "time", "groups"]),
+        "sigma": DataArray(sigma, dims=["chain", "draw"]),
+    }},
+    coords={"groups": [f"g{i}" for i in range(n_groups)],
+            "time": [f"t{i}" for i in range(n_time)]},
+    dims={"beta": ["groups"], "gamma": ["time", "groups"]},
+)
+```
+
+### Scalar vs. array parameters
+
+```{python}
+# Scalar: one row per chain × draw
+sigma_df = td.spread_draws(dt, "sigma").collect()
+sigma_df.head()
+```
+
+```{python}
+# Array: one row per chain × draw × coordinate
+beta_df = td.spread_draws(dt, "beta[groups]").collect()
+beta_df.head()
+```
+
+## Plot: Posterior Distributions by Group
+
+With the tidy frame in hand, a density plot per group is one lets-plot call.
+
+```{python}
+#| fig-cap: "Posterior density of `beta` by group."
+
+(
+    ggplot(beta_df.to_pandas(), aes(x="beta", fill="groups"))
+    + geom_density(alpha=0.5)
+    + labs(x="beta", y="density", fill="group",
+           title="Posterior distribution of beta by group")
+    + theme_minimal()
+)
+```
+
+## Cross-Dimension Joins
+
+When you request variables with different dimensions in one call, `tidydraws` joins them. Variables sharing dimensions are inner-joined; a scalar is broadcast across array dimensions (with a logged warning).
+
+```{python}
+mixed = td.spread_draws(dt, "beta[groups]", "sigma").collect()
+mixed.head()
+```
+
+The scalar `sigma` now appears on every `beta[groups]` row. This lets you plot parameters against each other directly.
+
+```{python}
+#| fig-cap: "Posterior `beta` by group, coloured by the draw's `sigma`."
+
+(
+    ggplot(mixed.to_pandas(), aes(x="groups", y="beta"))
+    + geom_jitter(aes(color="sigma"), width=0.15, alpha=0.15, size=0.8)
+    + scale_color_gradient(low="steelblue", high="firebrick")
+    + labs(x="group", y="beta", color="sigma",
+           title="beta draws coloured by sigma")
+    + theme_minimal()
+)
+```
+
+## Prior vs. Posterior
+
+Add a `prior` group to the `DataTree` and `spread_draws_compare()` stacks the two sources with a `source` column — the tidy input for a comparison plot.
+
+```{python}
+prior = az.from_dict(
+    {"posterior": dt.children["posterior"].to_dataset(),
+     "prior": {
+        "beta": DataArray(np.random.normal(0.0, 0.5, (chains, draws, n_groups)),
+                          dims=["chain", "draw", "groups"]),
+        "gamma": DataArray(np.random.normal(0.3, 0.2, (chains, draws, n_time, n_groups)),
+                           dims=["chain", "draw", "time", "groups"]),
+        "sigma": DataArray(np.random.normal(1.0, 0.2, (chains, draws)),
+                           dims=["chain", "draw"]),
+     }},
+    coords={"groups": [f"g{i}" for i in range(n_groups)],
+            "time": [f"t{i}" for i in range(n_time)]},
+    dims={"beta": ["groups"], "gamma": ["time", "groups"]},
 )
 
-print("DataTree created with:")
-print(f"- {n_groups} groups")
-print(f"- {n_time_points} time points")
+compare = td.spread_draws_compare(prior, "beta[groups]").collect()
+compare.head()
 ```
 
-## Scalar Parameters vs. Multi-dimensional Arrays
-
-When you specify a scalar parameter, it is extracted as-is:
-
 ```{python}
-# Scalar parameter
-sigma_draws = td.spread_draws(dt, "sigma")
-print("Scalar parameter (sigma) extraction:")
-print(f"Shape: {sigma_draws.collect().shape}")
-print("Columns:", sigma_draws.collect().columns)
-```
+#| fig-cap: "Prior vs. posterior distributions of `beta` by group."
 
-When you specify an array parameter with named dimensions:
-
-```{python}
-# Array parameter - this automatically infers the dimensions 
-beta_draws = td.spread_draws(dt, "beta[groups]")
-print("Array parameter extraction (beta[groups]):")
-print(f"Shape: {beta_draws.collect().shape}")
-print("Columns:", beta_draws.collect().columns)
-```
-
-## Cross-dimension Joins and Broadcasting
-
-A crucial feature of `tidydraws` is the handling of cross-dimension joins. Let's see how this works:
-
-```{python}
-# Extract both scalar and array parameters - this triggers an automatic cross-join
-mixed_draws = td.spread_draws(dt, "beta[groups]", "sigma")
-print("Cross-dim extraction (beta[groups] + sigma):")
-print(f"Shape: {mixed_draws.collect().shape}")
-print("Columns:", mixed_draws.collect().columns)
-
-# Let's examine a few rows to understand the broadcasting
-print("\nFirst 10 rows:")
-print(mixed_draws.collect().head(10))
-```
-
-When you have parameters with different dimensions, `tidydraws` automatically handles the cross-join by broadcasting scalar parameters across array dimensions. This is a common case that "just works" in `tidydraws`, unlike manual approaches where such joins need to be handled explicitly.
-
-## Prior vs. Posterior Comparison
-
-One of the fundamental use cases in Bayesian analysis is comparing parameters from different distributions. Let's create mock data for a prior distribution:
-
-```{python}
-# Generate prior draws
-prior_data = {
-    "beta": DataArray(np.random.normal(0, 0.5, (chains, draws, n_groups)), 
-                      dims=["chain", "draw", "groups"]),
-    "gamma": DataArray(np.random.normal(0.3, 0.2, (chains, draws, n_time_points, n_groups)), 
-                      dims=["chain", "draw", "time", "groups"]),
-    "sigma": DataArray(np.random.normal(1.0, 0.2, (chains, draws)), 
-                      dims=["chain", "draw"])
-}
-
-# Combine into a single DataTree with both groups
-dt_with_prior = az.from_dict(
-    {"posterior": posterior_data, "prior": prior_data},
-    coords={
-        "groups": [f"group_{i}" for i in range(n_groups)],
-        "time": [f"time_{i}" for i in range(n_time_points)]
-    },
-    dims={
-        "beta": ["groups"],
-        "gamma": ["time", "groups"],
-    }
+(
+    ggplot(compare.to_pandas(), aes(x="beta", fill="source"))
+    + geom_density(alpha=0.5)
+    + facet_wrap(facets="groups", ncol=2)
+    + labs(x="beta", y="density", fill="source",
+           title="Prior vs. posterior by group")
+    + theme_minimal()
 )
-
-print("DataTree with both posterior and prior")
 ```
 
-Now let's compare the posterior and prior distributions:
+## Forest Plot with Credible Intervals
+
+Summarise the draws per group with Polars quantiles, then plot with `geom_pointrange`.
 
 ```{python}
-# Compare beta from posterior vs. prior
-beta_compare = td.spread_draws_compare(dt_with_prior, "beta[groups]")
-print("Posterior vs. Prior comparison of beta:")
-print(f"Shape: {beta_compare.collect().shape}")
-print("Column structure:", beta_compare.collect().columns)
-print("\nFirst few rows:")
-print(beta_compare.collect().head())
+#| fig-cap: "Forest plot of `beta` by group (89% credible interval)."
 
-# Compare all parameters at once
-all_compare = td.spread_draws_compare(dt_with_prior, "beta[groups]", "sigma", groups=["posterior", "prior"])
-print("\nComparison of both beta and sigma:")
-print(f"Shape: {all_compare.collect().shape}")
-print("Column structure:", all_compare.collect().columns)
-```
-
-## Forest Plots and Visualization
-
-Now let's create a proper forest plot using the `stat_pointinterval` helper functions:
-
-```{python}
-# Let's examine what a forest plot summary looks like
-beta_draws = td.spread_draws(dt_with_prior, "beta[groups]")
-beta_summary = (
-    beta_draws
+summary = (
+    td.spread_draws(dt, "beta[groups]")
     .group_by("groups")
-    .agg([
-        pl.col("beta").quantile(0.055).alias("q5.5"),
-        pl.col("beta").quantile(0.5).alias("median"),
-        pl.col("beta").quantile(0.945).alias("q94.5"),
-    ])
+    .agg(
+        pl.col("beta").quantile(0.055).alias("lower"),
+        pl.col("beta").median().alias("median"),
+        pl.col("beta").quantile(0.945).alias("upper"),
+    )
+    .sort("groups")
     .collect()
 )
-print("Beta parameter summary by group (89% HDI):")
-print(beta_summary)
+
+(
+    ggplot(summary.to_pandas(), aes(x="groups", y="median"))
+    + geom_pointrange(aes(ymin="lower", ymax="upper"), size=0.8)
+    + geom_hline(yintercept=0, linetype="dashed", color="#888888")
+    + labs(x="group", y="beta", title="Posterior beta by group (89% CrI)")
+    + theme_minimal()
+)
 ```
 
-## Understanding Broadcast Join Warnings
+## Summary
 
-When cross-dimension joins occur, `tidydraws` automatically issues a warning to inform you, ensuring transparency:
+- **String specs** (`"beta[groups]"`) declare which variable and which dimensions to extract.
+- **Cross-dim joins** broadcast scalars across arrays so you can plot parameters together.
+- **`spread_draws_compare()`** stacks prior/posterior with a `source` column for comparison plots.
+- The tidy frame is the contract: once you have it, any plotting library can take over.
 
-```{python}
-# Let's show how we might examine the join behavior
-def inspect_join_behavior():
-    print("\n--- JOIN BEHAVIOR INSPECTION ---")
-    mixed_result = td.spread_draws(dt, "beta[groups]", "sigma")
-    
-    # Collect to see shape 
-    result_df = mixed_result.collect()
-    print(f"Mixed draw result - Shape: {result_df.shape}")
-    print("Columns:", result_df.columns)
-    
-    # This shows that:
-    # - beta[groups] gives us 1000 * 4 = 4000 rows 
-    # - sigma is broadcast to all these rows (but only one value per chain/draw combination)
-    # - The result has 4000 rows because that's the full cross-product
-    
-inspect_join_behavior()
-```
-
-## Dimension Inference and Coordinate Names
-
-A key feature of `tidydraws` is automatic dimension inference from xarray coordinates:
-
-```{python}
-# Let's examine the coordinate information available in our DataTree
-print("Available coordinates:")
-for coord_name, coord_values in dt.posterior.coords.items():
-    print(f"  {coord_name}: {coord_values.values}")
-
-# Show that the system understands dimensions correctly
-beta_shape = beta_draws.collect().shape
-sigma_shape = sigma_draws.collect().shape
-
-print(f"\nBeta draw shape (chains × draws × groups): {beta_shape}")
-print(f"Sigma draw shape (chains × draws): {sigma_shape}")
-```
-
-## Benefits of This Approach
-
-The `tidydraws` approach to parameter space extraction has several key advantages:
-
-1. **No Data Duplication**: Unlike approaches where parameters get duplicated across observations, we maintain clean separate frames.
-2. **Automatic Dimension Handling**: The system automatically infers coordinate dimensions from the xarray structure.
-3. **Explicit Cross-Dimension Joins**: When needed, the joins clearly broadcast scalar parameters across array dimensions with warning messages.
-4. **Lazy Evaluation**: Extraction happens lazily so that filtering can occur before materialization.
-5. **Flexible Grouping**: Any group (posterior, prior, custom) works out of the box.
-
-This separation between parameters and predictions allows for clear visualizations while maintaining computational efficiency through lazy evaluation.
-```
+Next, see [Prediction Space](03-prediction-space.qmd) for joining predictive draws to a covariate grid.

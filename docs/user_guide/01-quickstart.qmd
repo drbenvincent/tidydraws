@@ -3,197 +3,132 @@ title: "Quickstart"
 description: A 5-minute guide to getting started with tidydraws
 ---
 
-Let's look at a minimal example of using `tidydraws` for Bayesian visualization. This will show how we extract parameters from posterior and prior samples, and make a basic forest plot and predictive fit.
+`tidydraws` is a **data-transformation library**: it turns MCMC output (ArviZ `DataTree` objects) into tidy Polars frames that are ready to plot. It does not plot anything itself — you hand the tidy frame to any ggplot-like package you like. This quickstart uses [lets-plot](https://lets-plot.org/) as the plotting backend.
 
-## Why Use tidydraws?
+The workflow is always three steps:
 
-Plotting MCMC output in Python today requires manual wrangling of `arviz.InferenceData`
-objects: slicing xarray dimensions, iterating over groups, managing coordinate alignment.
-This is imperative, boilerplate-heavy, and error-prone.
+1. **Extract** tidy draws with `spread_draws()` / `add_epred_draws()`.
+2. **Collect** with `.collect()` when you're ready to plot.
+3. **Plot** with your chosen backend using standard geoms.
 
-R's [`tidybayes`](https://github.com/TuringLang/tidybayes) solved this elegantly by providing a data transformation layer that respects the semantics of parameter space vs. prediction space. `tidydraws` brings the same philosophy to Python — using **Polars LazyFrames** so you only pay the materialisation cost when you're ready.
-
-## Creating a Sample Bayesian Model
-
-In this example, we'll work with synthetic data from a hierarchical linear model to demonstrate `tidydraws` capabilities. First, let's create a simulated dataset:
+## Setup
 
 ```{python}
-# Create sample data for demonstration
 import numpy as np
 import arviz as az
-import pandas as pd
+import polars as pl
+import tidydraws as td
+from xarray import DataArray
+from lets_plot import *
 
+LetsPlot.setup_html()
+```
+
+## A Sample Model
+
+We'll build a small hierarchical model with 4 groups. In practice you'd get this `DataTree` from PyMC or Stan; here we simulate it so the example is self-contained.
+
+```{python}
 np.random.seed(42)
 
-# Simulate synthetic data for a hierarchical model
+chains, draws = 4, 500
 n_groups = 4
-n_obs_per_group = 20
-obs_ind = []
-group_labels = []
 
-for group in range(n_groups):
-    for i in range(n_obs_per_group):
-        obs_ind.append(i)
-        group_labels.append(group)
+beta = np.random.normal(1.0, 0.2, (chains, draws, n_groups))
+intercept = np.random.normal(0.0, 0.5, (chains, draws, n_groups))
+sigma = np.random.normal(0.8, 0.1, (chains, draws))
 
-obs_df = pd.DataFrame({"x": np.random.normal(10, 5, n_obs_per_group * n_groups),
-                       "group": group_labels,
-                       "y": np.random.normal(0, 2, n_obs_per_group * n_groups)})
-
-# Generate a simple dataset
-data_dict = {
-    "obs_ind": obs_ind,
-    "group": group_labels,
-    "x": obs_df["x"].values,
-    "y": obs_df["y"].values,
-}
-
-print("Generated synthetic dataset with:")
-print(f"- {len(data_dict['x'])} observations")
-print(f"- {n_groups} groups")
-```
-
-## Setting up a Bayesian Model
-
-While in a real scenario you would have used PyMC to sample an actual posterior, for this demonstration we'll create simulated
-model data using ArviZ's DataTree interface.
-
-```{python}
-# Create simulated posterior draws with groups
-chains = 4
-draws = 1000
-
-# Simulate beta parameters per group (slope coefficients)
-beta_draws = np.random.normal(1, 0.2, (chains, draws, n_groups))
-
-# Simulate intercepts 
-intercept_draws = np.random.normal(0, 0.5, (chains, draws, n_groups))
-
-# Simulate sigma (error standard deviation)  
-sigma_draws = np.random.normal(0.8, 0.1, (chains, draws))
-
-# Create DataTree using ArviZ 1.0 interface
-from xarray import DataArray
-
-# Create datasets for posterior and prior
-posterior_data = {
-    "beta": DataArray(beta_draws, dims=["chain", "draw", "groups"]),
-    "intercept": DataArray(intercept_draws, dims=["chain", "draw", "groups"]),
-    "sigma": DataArray(sigma_draws, dims=["chain", "draw"])
-}
-
-# Create the DataTree
 dt = az.from_dict(
-    {"posterior": posterior_data},
-    coords={
-        "groups": [f"group_{i}" for i in range(n_groups)],
-        "obs_ind": list(range(len(obs_df)))
-    },
-    dims={
-        "beta": ["groups"],
-        "intercept": ["groups"],
-    }
+    {"posterior": {
+        "beta": DataArray(beta, dims=["chain", "draw", "groups"]),
+        "intercept": DataArray(intercept, dims=["chain", "draw", "groups"]),
+        "sigma": DataArray(sigma, dims=["chain", "draw"]),
+    }},
+    coords={"groups": [f"g{i}" for i in range(n_groups)]},
+    dims={"beta": ["groups"], "intercept": ["groups"]},
 )
-
-print("Created ArviZ DataTree with the following structure:")
-print(f"- Chains: {chains}")
-print(f"- Draws: {draws}")
-print(f"- Groups: {dt.posterior.coords['groups'].values}")
 ```
 
-## Extracting Draw Parameters
+## Extract Tidy Draws
 
-Now we'll extract posterior draws using `spread_draws()` function. This is where tidydraws shines: parameters are extracted without duplication across observations.
+`spread_draws()` returns a `pl.LazyFrame` with one row per chain × draw × coordinate combination. Each variable becomes a column.
 
 ```{python}
-import tidydraws as td
-import polars as pl
-
-# Extract posterior beta and intercept draws
 beta_draws = td.spread_draws(dt, "beta[groups]", "intercept[groups]")
-print("Posterior beta draws:")
-print(f"Shape: {beta_draws.collect().shape}")
-print("Columns:", beta_draws.collect().columns)
-```
-
-## Comparing Posterior and Prior
-
-Let's now compare posterior with prior draws:
-
-```{python}
-# Create a mock prior (in practice you would have a proper prior InferenceData)
-# For this demo, we'll simulate some prior draws with different means
-prior_data = {
-    "beta": DataArray(np.random.normal(0.5, 0.3, (chains, draws, n_groups)), 
-                      dims=["chain", "draw", "groups"]),
-    "intercept": DataArray(np.random.normal(0.2, 0.6, (chains, draws, n_groups)), 
-                          dims=["chain", "draw", "groups"]),
-    "sigma": DataArray(np.random.normal(1.0, 0.15, (chains, draws)), 
-                      dims=["chain", "draw"])
-}
-
-# Create a new DataTree with a prior group
-dt_with_prior = az.from_dict(
-    {"posterior": posterior_data, "prior": prior_data},
-    coords={
-        "groups": [f"group_{i}" for i in range(n_groups)],
-        "obs_ind": list(range(len(obs_df)))
-    },
-    dims={
-        "beta": ["groups"],
-        "intercept": ["groups"],
-    }
-)
-
-# Compare posterior vs. prior
-compare_draws = td.spread_draws_compare(dt_with_prior, "beta[groups]")
-print("Comparison of posterior and prior beta draws:")
-print(f"Shape: {compare_draws.collect().shape}")
-```
-
-In this comparison, we're showing how `spread_draws_compare` can help with visualizing differences between parameter distributions.
-
-## Making a Forest Plot
-
-Let's create a simple forest plot to illustrate the parameter estimates:
-
-```{python}
-# Collect for visualization 
 beta_df = beta_draws.collect()
-
-print("First few rows of beta draws:")
-print(beta_df.head(5))
+beta_df.head()
 ```
 
-Now let's make a basic forest plot:
+The frame is tidy: `chain`, `draw`, `groups`, `beta`, `intercept`. That's all a plotting library needs.
+
+## Plot: Forest Plot of Parameter Estimates
+
+To make a point-interval plot we summarise the draws per group with Polars, then hand the summary to lets-plot's `geom_pointrange`.
 
 ```{python}
-# Summarise the parameter draws for a forest plot
-beta_summary = (
+#| fig-cap: "Posterior estimates of the slope `beta` by group (89% credible interval)."
+
+summary = (
     beta_draws
     .group_by("groups")
-    .agg([
-        pl.col("beta").quantile(0.055).alias("q5.5"),
-        pl.col("beta").quantile(0.5).alias("median"),
-        pl.col("beta").quantile(0.945).alias("q94.5"),
-    ])
+    .agg(
+        pl.col("beta").quantile(0.055).alias("lower"),
+        pl.col("beta").median().alias("median"),
+        pl.col("beta").quantile(0.945).alias("upper"),
+    )
+    .sort("groups")
     .collect()
 )
-print("Beta parameter summary by group (89% HDI):")
-print(beta_summary)
 
-# In practice you would pass these draws to a plotting library.
-# The key point is that the tidydraws output is ready-to-use:
-print("\nForest plot data ready for visualization")
+(
+    ggplot(summary.to_pandas(), aes(x="groups", y="median"))
+    + geom_pointrange(aes(ymin="lower", ymax="upper"), size=0.8)
+    + geom_hline(yintercept=0, linetype="dashed", color="#888888")
+    + labs(x="group", y="beta", title="Posterior slope by group")
+    + theme_minimal()
+)
+```
+
+## Prior vs. Posterior Comparison
+
+`spread_draws_compare()` stacks draws from multiple groups (e.g. `posterior` and `prior`) into one frame, adding a `source` column. This is the tidy input for a comparison plot.
+
+```{python}
+prior = az.from_dict(
+    {"posterior": dt.children["posterior"].to_dataset(),
+     "prior": {
+        "beta": DataArray(np.random.normal(0.0, 0.5, (chains, draws, n_groups)),
+                          dims=["chain", "draw", "groups"]),
+        "intercept": DataArray(np.random.normal(0.0, 0.8, (chains, draws, n_groups)),
+                               dims=["chain", "draw", "groups"]),
+        "sigma": DataArray(np.random.normal(1.0, 0.2, (chains, draws)),
+                           dims=["chain", "draw"]),
+     }},
+    coords={"groups": [f"g{i}" for i in range(n_groups)]},
+    dims={"beta": ["groups"], "intercept": ["groups"]},
+)
+
+compare = td.spread_draws_compare(prior, "beta[groups]").collect()
+compare.head()
+```
+
+```{python}
+#| fig-cap: "Prior vs. posterior distributions of `beta` by group."
+
+(
+    ggplot(compare.to_pandas(), aes(x="beta", fill="source"))
+    + geom_density(alpha=0.5)
+    + facet_wrap(facets="groups", ncol=2)
+    + labs(x="beta", y="density", fill="source",
+           title="Prior vs. posterior by group")
+    + theme_minimal()
+)
 ```
 
 ## Summary
 
-This quickstart demonstrates how `tidydraws` makes it easy to work with MCMC draws in a tidy way: 
+1. **`spread_draws()`** extracts parameters into a tidy `LazyFrame` — one row per chain × draw × coordinate.
+2. **`spread_draws_compare()`** stacks groups (prior/posterior) with a `source` column for comparison plots.
+3. **`.collect()`** materialises the frame; from there any plotting library can take over.
 
-1. **`spread_draws()`** extracts parameters into clean DataFrames without duplication
-2. **`spread_draws_compare()`** allows easy comparison between posterior and prior distributions
-3. **Lazy evaluation** lets you filter before collecting data
-
-The power of `tidydraws` is that it separates the parameter space (where parameters like beta and intercept live) from the prediction space (where mu, y_hat, and other predictions live). This clean separation avoids the issue in typical approaches where coefficient values get duplicated across all observations.
-```
+`tidydraws` stops at the tidy frame. Everything you see above — `geom_pointrange`, `geom_density`, `facet_wrap` — is plain lets-plot. See [Parameter Space](02-parameter-space.qmd) and [Prediction Space](03-prediction-space.qmd) for deeper coverage, and [Plotting Backends](05-backends.qmd) for the same plots rendered with plotnine.

@@ -2596,7 +2596,9 @@ all = [
 ]
 dev = [
     { name = "great-docs" },
+    { name = "lets-plot" },
     { name = "mypy" },
+    { name = "plotnine" },
     { name = "pytest" },
     { name = "quarto" },
     { name = "ruff" },
@@ -2611,6 +2613,8 @@ plotnine = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "lets-plot" },
+    { name = "plotnine" },
     { name = "pytest" },
 ]
 
@@ -2618,9 +2622,11 @@ dev = [
 requires-dist = [
     { name = "arviz", specifier = ">=1.0" },
     { name = "great-docs", marker = "extra == 'dev'", specifier = ">=0.14.0" },
+    { name = "lets-plot", marker = "extra == 'dev'" },
     { name = "lets-plot", marker = "extra == 'letsplot'" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0" },
     { name = "numpy" },
+    { name = "plotnine", marker = "extra == 'dev'" },
     { name = "plotnine", marker = "extra == 'plotnine'" },
     { name = "polars", specifier = ">=0.20" },
     { name = "pyarrow", specifier = ">=24.0.0" },
@@ -2635,7 +2641,11 @@ requires-dist = [
 provides-extras = ["letsplot", "plotnine", "all", "dev"]
 
 [package.metadata.requires-dev]
-dev = [{ name = "pytest", specifier = ">=9.1.1" }]
+dev = [
+    { name = "lets-plot" },
+    { name = "plotnine" },
+    { name = "pytest", specifier = ">=9.1.1" },
+]
 
 [[package]]
 name = "tinycss2"

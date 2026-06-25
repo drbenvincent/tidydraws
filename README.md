@@ -7,33 +7,47 @@
 ## Quick Example
 
 ```python
+import numpy as np
 import arviz as az
+import polars as pl
 import tidydraws as td
+from xarray import DataArray
 from lets_plot import *
+LetsPlot.setup_html()
 
-# Load an ArviZ 1.0+ xarray.DataTree (e.g., from PyMC sampling)
-dt = az.from_netcdf("model.nc")
+# A small synthetic posterior: 4 chains × 500 draws × 4 groups
+chains, draws, n_groups = 4, 500, 4
+beta = np.random.normal(1.0, 0.2, (chains, draws, n_groups))
+dt = az.from_dict(
+    {"posterior": {
+        "beta": DataArray(beta, dims=["chain", "draw", "groups"]),
+    }},
+    coords={"groups": [f"g{i}" for i in range(n_groups)]},
+    dims={"beta": ["groups"]},
+)
 
 # ── Parameter space: tidy posterior draws ────────────────────────
-beta_draws = td.spread_draws(dt, "beta[groups]", "intercept[groups]")
-# → LazyFrame with columns: chain, draw, groups, beta, intercept
-# → 4 chains × 1000 draws × 4 groups = 16,000 tidy rows
+beta_draws = td.spread_draws(dt, "beta[groups]")
+# → LazyFrame with columns: chain, draw, groups, beta
 
-# ── Prediction space: join predictive draws to covariates ────────
-pred_draws = td.add_epred_draws(dt, newdata=None, var_name="mu")
-# → LazyFrame with columns: chain, draw, obs_ind, x, group, mu
-# → Parameters NOT included — clean separation of semantic levels
+# ── Summarise and plot with lets-plot ───────────────────────────
+summary = (
+    beta_draws.group_by("groups")
+    .agg(
+        pl.col("beta").quantile(0.055).alias("lower"),
+        pl.col("beta").median().alias("median"),
+        pl.col("beta").quantile(0.945).alias("upper"),
+    )
+    .sort("groups")
+    .collect()
+)
 
-# ── Plot with lets-plot ──────────────────────────────────────────
 (
-    ggplot()
-    # Posterior parameter forest plot
-    + td.stat_pointinterval(beta_draws, x="groups", y="beta", prob=0.89)
-    
-    # Posterior predictive fit — lazy filtering before collection
-    + td.stat_hdi(pred_draws.filter(pl.col("group") == 0).head(100), 
-                   x="x", y="mu", group="group", alpha=0.2)
-    + theme_classic()
+    ggplot(summary.to_pandas(), aes(x="groups", y="median"))
+    + geom_pointrange(aes(ymin="lower", ymax="upper"), size=0.8)
+    + geom_hline(yintercept=0, linetype="dashed", color="#888888")
+    + labs(x="group", y="beta", title="Posterior beta by group (89% CrI)")
+    + theme_minimal()
 )
 ```
 
@@ -79,10 +93,13 @@ See the [user guide](./docs/user_guide/) for tutorials, worked examples, and mig
 
 | Guide | Description |
 | --- | --- |
-| [01-quickstart](./docs/user_guide/01-quickstart.qmd) | 5-minute intro to `spread_draws()` and `add_epred_draws()` |
-| [02-parameter-space](./docs/user_guide/02-parameter-space.qmd) | Forest plots, ridge plots with `stat_pointinterval()` |
+| [01-quickstart](./docs/user_guide/01-quickstart.qmd) | 5-minute intro: extract tidy draws and plot with lets-plot |
+| [02-parameter-space](./docs/user_guide/02-parameter-space.qmd) | Forest plots, density plots, prior vs. posterior comparison |
 | [03-prediction-space](./docs/user_guide/03-prediction-space.qmd) | Posterior predictive fits, ribbons, credible intervals |
 | [04-migration-from-arviz](./docs/user_guide/04-migration-from-arviz.qmd) | Replacing ArviZ's imperative approach with tidydraws |
+| [05-backends](./docs/user_guide/05-backends.qmd) | The same plots rendered with lets-plot and plotnine |
+
+> The rendered docs site is at <https://drbenvincent.github.io/tidy-draws/>.
 
 ## Installation Options
 

@@ -3,321 +3,187 @@ title: "Migration from ArviZ"
 description: How to transition from imperative ArviZ approaches to declarative tidydraws workflows
 ---
 
-When working with MCMC output, there's typically a shift from ArviZ 0.x's imperative approach to `tidydraws`'s declarative one. In this section, we'll show exactly what that migration looks like and why `tidydraws` is cleaner.
+If you currently wrangle MCMC output with raw ArviZ/xarray, this page shows what changes when you adopt `tidydraws`. The payoff is the same in every case: a tidy Polars frame that plugs straight into a plotting library. The plots below use lets-plot.
 
-## The ArviZ Approaches (Before tidydraws)
-
-With older ArviZ versions or the current 1.0 approach, you typically manually extract data for visualization:
-
-### Manual xarray Dimension Access
+## Setup
 
 ```{python}
-import arviz as az
 import numpy as np
+import arviz as az
+import polars as pl
+import tidydraws as td
 from xarray import DataArray
+from lets_plot import *
 
-# Create simulated posterior draws for demonstration
+LetsPlot.setup_html()
+```
+
+## The Problem: Manual xarray Wrangling
+
+With raw ArviZ you access parameters by slicing xarray dimensions and reshaping by hand. This is imperative, verbose, and easy to get wrong.
+
+```{python}
 np.random.seed(42)
-chains, draws = 4, 1000
+chains, draws = 4, 500
 n_groups = 4
 
-beta_draws = np.random.normal(1, 0.2, (chains, draws, n_groups))
-sigma_draws = np.random.normal(0.8, 0.1, (chains, draws))
-
-posterior_data = {
-    "beta": DataArray(beta_draws, dims=["chain", "draw", "groups"]),
-    "sigma": DataArray(sigma_draws, dims=["chain", "draw"]),
-}
+beta_np = np.random.normal(1.0, 0.2, (chains, draws, n_groups))
+sigma_np = np.random.normal(0.8, 0.1, (chains, draws))
 
 dt = az.from_dict(
-    {"posterior": posterior_data},
-    coords={"groups": [f"group_{i}" for i in range(n_groups)]},
+    {"posterior": {
+        "beta": DataArray(beta_np, dims=["chain", "draw", "groups"]),
+        "sigma": DataArray(sigma_np, dims=["chain", "draw"]),
+    }},
+    coords={"groups": [f"g{i}" for i in range(n_groups)]},
     dims={"beta": ["groups"]},
 )
 
-print(f"DataTree created with {n_groups} groups, {chains} chains, {draws} draws")
-
-# Manual extraction - this is typical of ArviZ 1.0 approaches:
-def extract_with_arviz_approach():
-    # Accessing parameter values manually
-    samples = dt.posterior
-
-    # For scalar parameters you can access directly
-    sigma = samples["sigma"]  # Returns a DataArray with dims (chain, draw)
-
-    # For array parameters, you need explicit dimension handling
-    beta = samples["beta"]  # Returns a DataArray with dims (chain, draw, groups)
-
-    print("Manual approach required:")
-    print("- Manual slicing of dimensions")
-    print("- Explicit handling of coordinates")
-    print("- Risk of errors in joining different-sized arrays")
-
-    print(f"\nSigma shape: {sigma.values.shape}")
-    print(f"Beta shape: {beta.values.shape}")
-
-extract_with_arviz_approach()
+# Manual: stack chain/draw, move groups to rows, build a DataFrame by hand
+da = dt.posterior["beta"]
+manual = (
+    pl.DataFrame(da.values.reshape(-1, n_groups), schema=[f"g{i}" for i in range(n_groups)])
+    .melt(variable_name="groups", value_name="beta")
+)
+manual.head()
 ```
 
-### Creating "Denormalized" Tables 
+That works, but every new variable or dimension means another reshape, and joining parameters to predictions is left entirely to you.
 
-One common approach was to create flat tables with all variables for plotting:
+## The tidydraws Way: One Declarative Call
+
+`spread_draws()` parses the string spec, infers coordinates, and returns a tidy `LazyFrame` in one line.
 
 ```{python}
-# This is typical before tidydraws
-def make_tidy_old_approach():
-    """Demonstrate how old approach could produce denormalized data"""
-    
-    # Old way: make huge flattened table
-    # Problem: parameter values get duplicated 20x when there are 20 observations
-    
-    print("Old approach produces denormalized data:") 
-    print("- Parameters like beta[groups] duplicated per observation")
-    print("- Large tables (320,000 rows instead of 16,000)")
-    print("- Parameter and prediction space get conflated")
-    
-make_tidy_old_approach()
+tidy = td.spread_draws(dt, "beta[groups]").collect()
+tidy.head()
 ```
 
-## The tidydraws Approach: Clean Separation
-
-`tidydraws` follows the principles made famous by R's `tidybayes`, providing explicit separation between parameter and prediction spaces:
-
-### Clear, Declarative Function Calls
+Same data, no manual reshaping — and the frame is ready to plot.
 
 ```{python}
-import tidydraws as td
-import polars as pl
+#| fig-cap: "Posterior density of `beta` by group — tidydraws output, lets-plot rendering."
 
-# The tidydraws approach is much more explicit:
-# Extract parameters in one line — no manual slicing or indexing
-beta_lf = td.spread_draws(dt, "beta[groups]")
-print("tidydraws extraction:")
-print(f"  Shape: {beta_lf.collect().shape}")
-print(f"  Columns: {beta_lf.collect().columns}")
-print(f"\nThis results in {beta_lf.collect().shape[0]} clean parameter rows")
+(
+    ggplot(tidy.to_pandas(), aes(x="beta", fill="groups"))
+    + geom_density(alpha=0.5)
+    + labs(x="beta", y="density", fill="group",
+           title="Posterior beta by group")
+    + theme_minimal()
+)
 ```
 
-### Example: Parameter Space Comparison
+## Prior vs. Posterior, Compared
+
+Adding a prior group and comparing is a single `spread_draws_compare()` call — no manual concatenation.
 
 ```{python}
-# Now let's also add prior draws for comparison
-prior_data = {
-    "beta": DataArray(np.random.normal(0, 0.5, (chains, draws, n_groups)),
-                      dims=["chain", "draw", "groups"]),
-    "sigma": DataArray(np.random.normal(1.0, 0.2, (chains, draws)),
-                      dims=["chain", "draw"]),
-}
-
-dt_with_prior = az.from_dict(
-    {"posterior": posterior_data, "prior": prior_data},
-    coords={"groups": [f"group_{i}" for i in range(n_groups)]},
+prior = az.from_dict(
+    {"posterior": dt.children["posterior"].to_dataset(),
+     "prior": {
+        "beta": DataArray(np.random.normal(0.0, 0.5, (chains, draws, n_groups)),
+                          dims=["chain", "draw", "groups"]),
+        "sigma": DataArray(np.random.normal(1.0, 0.2, (chains, draws)),
+                           dims=["chain", "draw"]),
+     }},
+    coords={"groups": [f"g{i}" for i in range(n_groups)]},
     dims={"beta": ["groups"]},
 )
 
-print("DataTree with both posterior and prior groups")
-
-# Compare beta from posterior vs. prior using tidydraws
-beta_compare = td.spread_draws_compare(dt_with_prior, "beta[groups]")
-print("Posterior vs. Prior comparison of beta:")
-print(f"  Shape: {beta_compare.collect().shape}")
-print(f"  Column structure: {beta_compare.collect().columns}")
-print(f"  Source values: {beta_compare.collect()['source'].unique().to_list()}")
+compare = td.spread_draws_compare(prior, "beta[groups]").collect()
+compare.head()
 ```
 
-## Side-by-Side Comparison: Real Use Cases
-
-Let's compare specific scenarios for real-world plotting needs:
-
-### Forest Plot Construction
-
 ```{python}
-# ArviZ approach (before):
-print("ArviZ Forest Plot — Manual Steps:")
-print("  1. Extract parameter arrays: idata.posterior['beta']")
-print("  2. Manually handle dimensions: .values, stack, reshape")
-print("  3. Convert to DataFrame with manual indexing")
-print("  4. Stack/reshape data for plotting")
+#| fig-cap: "Prior vs. posterior of `beta` by group."
 
-# tidydraws approach:
-print("\ntidydraws Forest Plot — One call:")
-beta_lf = td.spread_draws(dt, "beta[groups]")
-result = beta_lf.collect()
-print(f"  Shape: {result.shape}")
-print(f"  Columns: {result.columns}")
-print("  Ready to plot directly — no manual reshaping needed")
+(
+    ggplot(compare.to_pandas(), aes(x="beta", fill="source"))
+    + geom_density(alpha=0.5)
+    + facet_wrap(facets="groups", ncol=2)
+    + labs(x="beta", y="density", fill="source",
+           title="Prior vs. posterior by group")
+    + theme_minimal()
+)
 ```
 
-### Posterior Predictive Fit
+## Prediction Space: No More Denormalised Tables
+
+The classic ArviZ pitfall is building one giant "denormalised" table where every parameter is duplicated across every observation. `tidydraws` keeps parameter and prediction spaces separate.
 
 ```{python}
-# Create predictions to demonstrate the prediction space
-# Simulate mu values for each observation
 total_obs = 80
-obs_ind = np.arange(total_obs)
-
-# Generate random covariate values for each observation index
 x_vals = np.random.normal(10, 5, total_obs)
 group_assignments = np.random.randint(0, n_groups, total_obs)
 
-# Use the original parameter arrays (beta_draws, sigma_draws from cell 1)
-mu_draws = np.zeros((chains, draws, total_obs))
+mu = np.zeros((chains, draws, total_obs))
 for i in range(total_obs):
     g = group_assignments[i]
-    mu_draws[:, :, i] = sigma_draws[:, :]  + beta_draws[:, :, g] * x_vals[i]
+    mu[:, :, i] = sigma_np[:, :] + beta_np[:, :, g] * x_vals[i]
 
-y_draws = mu_draws + np.random.normal(0, 0.3, (chains, draws, total_obs))
-
-# Build a DataTree with predictions + constant data
-# Note: ArviZ 1.x uses "constant_data" (not "predictions_constant_data") as the group name
 pred_dt = az.from_dict(
     {
-        "posterior": posterior_data,
+        "posterior": {
+            "beta": DataArray(beta_np, dims=["chain", "draw", "groups"]),
+            "sigma": DataArray(sigma_np, dims=["chain", "draw"]),
+        },
         "predictions": {
-            "mu": DataArray(mu_draws, dims=["chain", "draw", "obs_ind"]),
+            "mu": DataArray(mu, dims=["chain", "draw", "obs_ind"]),
         },
         "constant_data": {
             "x": DataArray(x_vals, dims=["obs_ind"]),
             "group": DataArray(group_assignments, dims=["obs_ind"]),
         },
     },
-    coords={
-        "groups": [f"group_{i}" for i in range(n_groups)],
-        "obs_ind": list(range(total_obs)),
-    },
+    coords={"groups": [f"g{i}" for i in range(n_groups)],
+            "obs_ind": list(range(total_obs))},
     dims={"beta": ["groups"], "x": ["obs_ind"], "group": ["obs_ind"]},
     pred_dims={"mu": ["obs_ind"]},
 )
 
-print("Prediction DataTree created")
-
-# ArviZ approach for predictive plots:
-print("\nArviZ approach — manual join:")
-print("  - Join prediction data with covariates manually")
-print("  - Handle duplicate information between parameter/prediction space")
-
-# tidydraws approach:
-# Pass constant_data_group="constant_data" since that's the ArviZ convention
-print("\ntidydraws approach — one call:")
-pred_draws = td.add_epred_draws(pred_dt, newdata=None, var_name="mu",
-                                constant_data_group="constant_data")
-pred_result = pred_draws.collect()
-print(f"  Shape: {pred_result.shape}")
-print(f"  Columns: {pred_result.columns}")
-print(f"  Rows: chains({chains}) × draws({draws}) × obs({total_obs}) = {chains * draws * total_obs}")
+pred = td.add_epred_draws(pred_dt, newdata=None, var_name="mu",
+                          constant_data_group="constant_data").collect()
+pred.head()
 ```
 
-## Performance and Memory Advantages
-
-One of the key benefits that becomes clear only with larger models:
+Note the columns: `chain`, `draw`, `obs_ind`, `x`, `group`, `mu`. No `beta`, no `sigma` — parameters stay in their own frame.
 
 ```{python}
-# Performance demonstration
-def performance_advantages():
-    print("\n--- PERFORMANCE AND MEMORY ADVANTAGES ---")
-    
-    print("Large dataset scenario (4 chains, 1000 draws, 80 observations):")
-    print("- ArviZ approach: 320k-row denormalized table")
-    print("- tidydraws approach: 16k rows parameter space + 320k rows prediction space") 
-    print()
-    
-    print("Benefits:")
-    print("✓ Memory efficiency: Work in separate spaces, filter before collecting")
-    print("✓ Computational speed: Predicate pushdown optimizes execution")
-    print("✓ Reduction of bugs: No duplication means no chance of alignment errors")
-    print("✓ Scalability: Works with very large models without memory explosion")
-    
-performance_advantages()
+#| fig-cap: "Posterior predictive fit by group — tidydraws prediction frame, lets-plot rendering."
+
+summary = (
+    pred
+    .group_by("obs_ind", "x", "group")
+    .agg(
+        pl.col("mu").quantile(0.055).alias("lower"),
+        pl.col("mu").median().alias("median"),
+        pl.col("mu").quantile(0.945).alias("upper"),
+    )
+    .sort("x")
+)
+
+(
+    ggplot(summary.to_pandas(), aes(x="x"))
+    + geom_ribbon(aes(ymin="lower", ymax="upper", fill="factor(group)"), alpha=0.25)
+    + geom_line(aes(y="median", color="factor(group)"), size=0.8)
+    + labs(x="x", y="mu", color="group", fill="group",
+           title="Posterior predictive fit by group")
+    + theme_minimal()
+)
 ```
 
-## Error Handling and Clarity
+## Migration Cheat Sheet
 
-Another strength of `tidydraws` is its clear error messages:
+| Task | ArviZ (manual) | tidydraws |
+| --- | --- | --- |
+| Extract `beta[groups]` | `dt.posterior["beta"].values` + reshape | `spread_draws(dt, "beta[groups]")` |
+| Compare prior/posterior | concat two arrays by hand | `spread_draws_compare(dt, "beta[groups]")` |
+| Join predictions to covariates | manual merge on obs index | `add_epred_draws(dt, var_name="mu")` |
+| Filter before plotting | slice after materialising | `.filter(...).collect()` on the LazyFrame |
 
-```{python}
-# Show error message patterns
-def error_handling_demo():
-    print("\n--- ERROR HANDLING ---")
-    
-    print("Before tidydraws:")
-    print("- Vague errors from indexing mismatch")
-    print("- Difficult to debug when joins fail silently")
-    
-    print("\ntidydraws:")  
-    print("- Explicit parameter specification \"beta[groups]\"")
-    print("- Clear error messages for missing dimensions")
-    print("- Fails loud and clear when parameters not found")
-    print("- Helpful guidance for data structure issues")
+## Summary
 
-error_handling_demo()
-```
-
-## Migration Roadmap
-
-When migrating from ArviZ approaches to `tidydraws`:
-
-### Phase 1: Understanding Parameter Space Extraction
-
-```{python}
-print("Migration Step 1: Replace dimension-indexing with string specs")
-
-# Before: manual indexing
-beta_manual = dt.posterior["beta"].values
-print(f"ArviZ manual shape: {beta_manual.shape}")
-
-# After: tidydraws string specs
-beta_draws = td.spread_draws(dt, "beta[groups]")
-beta_tidy = beta_draws.collect()
-print(f"tidydraws shape: {beta_tidy.shape}")
-print(f"tidydraws columns: {beta_tidy.columns}")
-```
-
-### Phase 2: Separating Parameter and Prediction Spaces
-
-```{python}
-print("Migration Step 2: Separate data extractions by semantic level")
-
-# Parameter space
-parameter_space = td.spread_draws(dt, "beta[groups]")
-print(f"Parameter space: {parameter_space.collect().shape}")
-
-# Prediction space (using the pred_dt we created above)
-prediction_space = td.add_epred_draws(pred_dt, newdata=None, var_name="mu",
-                                      constant_data_group="constant_data")
-print(f"Prediction space: {prediction_space.collect().shape}")
-print("Clean semantic separation between parameters and predictions")
-```
-
-### Phase 3: Leveraging Lazy Evaluation
-
-```{python}
-print("Migration Step 3: Adopt lazy evaluation patterns")
-
-# Before (inefficient) - not possible to filter before materializing
-# all_predictions = get_all_predictions()
-# filtered = all_predictions[all_predictions['group'] == 0]
-
-# After (efficient)
-pred_lf = td.add_epred_draws(pred_dt, newdata=None, var_name="mu",
-                              constant_data_group="constant_data")
-
-# Filter BEFORE collect() — predicate pushdown
-group0_pred = pred_lf.filter(pl.col("group") == 0).collect()
-print(f"Filtered (group == 0): {group0_pred.shape}")
-total_pred = pred_lf.collect()
-print(f"Unfiltered: {total_pred.shape}")
-```
-
-## Summary: Why tidydraws Wins
-
-The core principles that make `tidydraws` superior to imperative ArviZ approaches:
-
-1. **Semantic Clarity**: Clear separation between parameter and prediction space avoids confusion
-2. **Declarative Syntax**: `"beta[groups]"` is explicit, readable, and matches R's tidybayes style  
-3. **Error Prevention**: Explicit dimension handling prevents data alignment bugs
-4. **Memory Efficiency**: Lazy evaluation prevents unnecessary loading of large datasets 
-5. **Performance Scaling**: Works well with very large models without performance degradation
-6. **Reduced Code**: Fewer lines needed to achieve the same visualization goals
-
-By adopting `tidydraws`, you move from a manual, error-prone, and verbose approach to one that's clear, efficient, and scalable.
-```
+- Replace manual xarray slicing with declarative string specs.
+- Parameter and prediction spaces stay separate — no denormalised tables.
+- Lazy frames let you filter before `.collect()`.
+- The tidy output plugs straight into lets-plot (or any backend — see [Plotting Backends](05-backends.qmd)).

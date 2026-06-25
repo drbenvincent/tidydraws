@@ -32,6 +32,8 @@ dev = [
     "mypy >=1.0",
     "quarto >=0.1",
     "great-docs>=0.14.0",
+    "lets-plot",
+    "plotnine",
 ]
 
 [build-system]
@@ -41,4 +43,6 @@ build-backend = "hatchling.build"
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",
+    "lets-plot",
+    "plotnine",
 ]

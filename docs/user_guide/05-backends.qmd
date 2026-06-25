@@ -1,0 +1,185 @@
+---
+title: "Plotting Backends"
+description: "tidydraws is backend-agnostic — the same tidy data powers lets-plot and plotnine"
+status: new
+---
+
+`tidydraws` produces tidy Polars frames. It does not plot anything itself, and it does not depend on any plotting library. That means you can hand the same tidy frame to whichever ggplot-like backend you prefer. This page renders the **same two plots** with both [lets-plot](https://lets-plot.org/) and [plotnine](https://plotnine.org/) to make the point concrete.
+
+## Why two backends?
+
+| | lets-plot | plotnine |
+| --- | --- | --- |
+| Backend | Native SVG/HTML | matplotlib |
+| Maintainer | JetBrains | Community |
+| Feel | ggplot2-like, fast | ggplot2-like, familiar to matplotlib users |
+| Output | Interactive HTML | Static PNG |
+
+Both accept a pandas DataFrame. Since `tidydraws` returns Polars frames, the only bridge is `.to_pandas()` (or `.collect().to_pandas()` for a `LazyFrame`).
+
+## Setup
+
+```{python}
+import numpy as np
+import arviz as az
+import polars as pl
+import tidydraws as td
+from xarray import DataArray
+
+np.random.seed(42)
+chains, draws = 4, 500
+n_groups = 4
+
+beta = np.random.normal(1.0, 0.2, (chains, draws, n_groups))
+intercept = np.random.normal(0.0, 0.5, (chains, draws, n_groups))
+sigma = np.random.normal(0.8, 0.1, (chains, draws))
+
+dt = az.from_dict(
+    {"posterior": {
+        "beta": DataArray(beta, dims=["chain", "draw", "groups"]),
+        "intercept": DataArray(intercept, dims=["chain", "draw", "groups"]),
+        "sigma": DataArray(sigma, dims=["chain", "draw"]),
+    }},
+    coords={"groups": [f"g{i}" for i in range(n_groups)]},
+    dims={"beta": ["groups"], "intercept": ["groups"]},
+)
+```
+
+## The tidy frame (backend-agnostic)
+
+This single call produces the data both backends will plot.
+
+```{python}
+beta_df = td.spread_draws(dt, "beta[groups]").collect()
+beta_df.head()
+```
+
+## Forest plot — lets-plot
+
+```{python}
+#| fig-cap: "Forest plot of `beta` by group (89% CrI) — lets-plot."
+
+from lets_plot import *
+LetsPlot.setup_html()
+
+summary = (
+    beta_df.group_by("groups")
+    .agg(
+        pl.col("beta").quantile(0.055).alias("lower"),
+        pl.col("beta").median().alias("median"),
+        pl.col("beta").quantile(0.945).alias("upper"),
+    )
+    .sort("groups")
+)
+
+(
+    ggplot(summary.to_pandas(), aes(x="groups", y="median"))
+    + geom_pointrange(aes(ymin="lower", ymax="upper"), size=0.8)
+    + geom_hline(yintercept=0, linetype="dashed", color="#888888")
+    + labs(x="group", y="beta", title="Posterior beta by group (lets-plot)")
+    + theme_minimal()
+)
+```
+
+## Forest plot — plotnine
+
+The same summary frame, the same geoms, a different backend.
+
+```{python}
+#| fig-cap: "Forest plot of `beta` by group (89% CrI) — plotnine."
+
+from plotnine import *
+
+(
+    ggplot(summary.to_pandas(), aes(x="groups", y="median"))
+    + geom_pointrange(aes(ymin="lower", ymax="upper"), size=0.8)
+    + geom_hline(yintercept=0, linetype="dashed", color="#888888")
+    + labs(x="group", y="beta", title="Posterior beta by group (plotnine)")
+    + theme_minimal()
+)
+```
+
+## Posterior predictive fit — lets-plot
+
+Now a prediction-space example. We build a `DataTree` with predictions and constant data, extract with `add_epred_draws()`, and plot a ribbon + median line.
+
+```{python}
+#| fig-cap: "Posterior predictive fit by group — lets-plot."
+
+n_obs = 60
+x_vals = np.linspace(0, 20, n_obs)
+group_labels = np.tile(np.arange(n_groups), n_obs // n_groups)
+
+mu = np.zeros((chains, draws, n_obs))
+for i in range(n_obs):
+    g = group_labels[i]
+    mu[:, :, i] = intercept[:, :, g] + beta[:, :, g] * x_vals[i]
+
+pred_dt = az.from_dict(
+    {
+        "posterior": {
+            "beta": DataArray(beta, dims=["chain", "draw", "groups"]),
+            "intercept": DataArray(intercept, dims=["chain", "draw", "groups"]),
+            "sigma": DataArray(sigma, dims=["chain", "draw"]),
+        },
+        "predictions": {
+            "mu": DataArray(mu, dims=["chain", "draw", "obs_ind"]),
+        },
+        "constant_data": {
+            "x": DataArray(x_vals, dims=["obs_ind"]),
+            "group": DataArray(group_labels, dims=["obs_ind"]),
+        },
+    },
+    coords={"groups": [f"g{i}" for i in range(n_groups)],
+            "obs_ind": list(range(n_obs))},
+    dims={"beta": ["groups"], "intercept": ["groups"],
+          "x": ["obs_ind"], "group": ["obs_ind"]},
+    pred_dims={"mu": ["obs_ind"]},
+)
+
+pred = td.add_epred_draws(pred_dt, newdata=None, var_name="mu",
+                          constant_data_group="constant_data").collect()
+
+pred_summary = (
+    pred.group_by("obs_ind", "x", "group")
+    .agg(
+        pl.col("mu").quantile(0.055).alias("lower"),
+        pl.col("mu").median().alias("median"),
+        pl.col("mu").quantile(0.945).alias("upper"),
+    )
+    .sort("x")
+)
+
+(
+    ggplot(pred_summary.to_pandas(), aes(x="x"))
+    + geom_ribbon(aes(ymin="lower", ymax="upper", fill="factor(group)"), alpha=0.25)
+    + geom_line(aes(y="median", color="factor(group)"), size=0.8)
+    + labs(x="x", y="mu", color="group", fill="group",
+           title="Posterior predictive fit (lets-plot)")
+    + theme_minimal()
+)
+```
+
+## Posterior predictive fit — plotnine
+
+Same `pred_summary` frame, plotnine rendering.
+
+```{python}
+#| fig-cap: "Posterior predictive fit by group — plotnine."
+
+(
+    ggplot(pred_summary.to_pandas(), aes(x="x"))
+    + geom_ribbon(aes(ymin="lower", ymax="upper", fill="factor(group)"), alpha=0.25)
+    + geom_line(aes(y="median", color="factor(group)"), size=0.8)
+    + labs(x="x", y="mu", color="group", fill="group",
+           title="Posterior predictive fit (plotnine)")
+    + theme_minimal()
+)
+```
+
+## Summary
+
+- `tidydraws` is plotting-backend-agnostic because it only produces tidy data.
+- The only bridge is `.collect().to_pandas()` (or `.to_pandas()` on an eager frame).
+- lets-plot and plotnine share near-identical `ggplot()` APIs, so the same plot is a drop-in swap.
+- Choose based on output format (interactive HTML vs. static PNG) and ecosystem familiarity.
