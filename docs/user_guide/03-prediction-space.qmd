@@ -60,32 +60,47 @@ prediction_coords = {
     "obs_ind": list(range(total_obs))
 }
 
-# Create DataTree with observations and model structure 
-# (This block has some build complications in current ArviZ version, so it's not run during docs building)
-
-# Commented out due to arviz API compatibility issues:
-# dt = az.from_dict(
-#     posterior=model_data,
-#     observed_data={"y": y_draws[:, 0, :].flatten()}, # Just use one draw for demonstration
-#     coords=prediction_coords
-# )
-model_data = {
-    # Parameters (parameter space)
+# Create DataTree with observations and model structure
+# We split parameters into "posterior", predictions into "predictions",
+# and covariates into "constant_data"
+param_data = {
     "intercept": DataArray(intercept_vals, dims=["chain", "draw", "groups"]),
-    "beta": DataArray(beta_vals, dims=["chain", "draw", "groups"]),  
+    "beta": DataArray(beta_vals, dims=["chain", "draw", "groups"]),
     "sigma": DataArray(sigma_vals, dims=["chain", "draw", "groups"]),
-    
-    # Predictions (prediction space)
-    "mu": DataArray(mu_draws, dims=["chain", "draw", "obs_ind"]),
-    "y": DataArray(y_draws, dims=["chain", "draw", "obs_ind"])
 }
 
-# For demonstration, we'll also create a constant data structure 
-constant_data = {
-    "x": x_vals,
-    "group": group_labels,
-    "obs_ind": obs_ind
+pred_data = {
+    "mu": DataArray(mu_draws, dims=["chain", "draw", "obs_ind"]),
 }
+
+const_data = {
+    "x": DataArray(x_vals, dims=["obs_ind"]),
+    "group": DataArray(group_labels, dims=["obs_ind"]),
+}
+
+dt = az.from_dict(
+    {
+        "posterior": param_data,
+        "predictions": pred_data,
+        "constant_data": const_data,
+    },
+    coords=prediction_coords,
+    dims={
+        "beta": ["groups"],
+        "intercept": ["groups"],
+        "sigma": ["groups"],
+        "x": ["obs_ind"],
+        "group": ["obs_ind"],
+    },
+    pred_dims={
+        "mu": ["obs_ind"],
+    },
+)
+
+print("DataTree created with groups: posterior, predictions, constant_data")
+print(f"Posterior groups: {list(dt['posterior'].to_dataset().data_vars)}")
+print(f"Predictions: {list(dt['predictions'].to_dataset().data_vars)}")
+print(f"Constant data: {list(dt['constant_data'].to_dataset().data_vars)}")
 ```
 
 ## Joining Prediction Data to Covariates
@@ -127,12 +142,13 @@ The most interesting and practical part is the `add_epred_draws()` function, whi
 try:
     # First, let's see what this looks like with the right DataTree structure
     
-    # Let's create a proper prediction DataTree (commented out due to build complications)
-    # pred_draws = td.add_epred_draws(dt, newdata=None, var_name="mu")
+    # Extract predictions using add_epred_draws()
+    pred_draws = td.add_epred_draws(dt, newdata=None, var_name="mu",
+                                    constant_data_group="constant_data")
     
-    print("Prediction draws extraction works as:")
-    print("If dt contained proper prediction data, we could extract: ")
-    print("pred_draws = td.add_epred_draws(dt, newdata=newdata_df, var_name='mu')")
+    print("Prediction draws extracted:")
+    print(f"Shape: {pred_draws.collect().shape}")
+    print("Columns:", pred_draws.collect().columns)
     
 except Exception as e:
     print(f"No prediction data available in current structure: {e}")
@@ -179,15 +195,15 @@ def show_lazy_filtering():
     
     print("\n--- LAZY EVALUATION EXAMPLE ---")
     
-    # Create a large prediction dataframe (simulated)
-    # pred_frames = [td.add_epred_draws(dt, newdata=None, var_name="mu") for _ in range(2)]
+    # Extract predictions — still lazy, nothing computed yet
+    pred_lf = td.add_epred_draws(dt, newdata=None, var_name="mu",
+                                  constant_data_group="constant_data")
     
     print("We can apply filters before collecting:")
     print("Example: filter to group 0 only")
-    
-    # This pattern is crucial for large datasets
-    # pred_draws.filter(pl.col("group") == 0).collect() 
-    # will be much faster than loading 320,000 rows and then filtering
+    result = pred_lf.filter(pl.col("group") == 0).collect()
+    print(f"Filtered (group == 0): {result.shape}")
+    print(f"  vs. unfiltered: 4x1000x80 = 320,000 rows")
     
 show_lazy_filtering()
 ```
@@ -197,44 +213,25 @@ show_lazy_filtering()
 Let's see how to build a proper posterior predictive fit using the tidydraws approach:
 
 ```{python}
-# Create sample data for visualization
-try:
-    # First, create a basic prediction dataset structure that simulates what we'd have 
-    from letsplot import *
-    
-    print("Building visualization elements...")
-    
-    # In a realistic scenario you would:
-    # 1. Extract predictive draws  
-    # 2. Calculate HDI intervals using stat_hdi()
-    # 3. Create median lines with stat_median_line()
-    # 4. Overlay original observations
-    
-    print("Prediction space approach supports:")
-    print("- Credible interval ribbons (stat_hdi)")
-    print("- Median prediction lines (stat_median_line)") 
-    print("- Filtering before collection for performance")
-    print("- Separation of parameter and prediction data types")
-    
-except ImportError:
-    print("Let's-plot not available, but the concepts remain valid")
+# Demonstrate how prediction draws are prepared for plotting
+pred_lf = td.add_epred_draws(dt, newdata=None, var_name="mu",
+                              constant_data_group="constant_data")
 
-# Demonstrate what the resulting plots would look like conceptually
-def sample_plots():
-    print("\n--- SAMPLE PLOTS CONCEPTS ---")
-    
-    # Posterior predictive plots typically involve:
-    # 1. Grouped prediction intervals (HDI)
-    # 2. Median prediction lines  
-    # 3. Overlaying original observations
-    # 4. Faceted views by group
-    
-    print("Typical posterior predictive visualization pipeline:")
-    print("Input: Model with parameters and predictions")
-    print("Process: Add prediction draws using add_epred_draws()")
-    print("Output: LazyFrame for plotting - only materialized when .collect() is called")
-    
-sample_plots()
+# Summarise predictions for a posterior predictive fit
+pred_summary = (
+    pred_lf
+    .group_by("obs_ind", "x")
+    .agg([
+        pl.col("mu").quantile(0.055).alias("q5.5"),
+        pl.col("mu").median().alias("median"),
+        pl.col("mu").quantile(0.945).alias("q94.5"),
+    ])
+    .collect()
+)
+
+print("Prediction summary for posterior predictive fit:")
+print(pred_summary.head(5))
+print(f"\n{pred_summary.shape[0]} rows summarised ready for plotting")
 ```
 
 ## Memory Efficiency and Predicate Pushdown
@@ -287,3 +284,4 @@ The separation of parameter and prediction spaces in `tidydraws` offers several 
 5. **Compositional**: You can compose operations without materializing large intermediate datasets
 
 This design matches the semantic distinction described in `tidydraws`' architecture: **parameter space** (where `beta[groups]`, `intercept[groups]`, and `sigma` live) vs. **prediction space** (where `mu`, `y_hat`, and similar variables live).
+```

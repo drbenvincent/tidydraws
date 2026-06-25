@@ -166,7 +166,7 @@ def add_epred_draws(
     newdata,
     var_name,
     idata_group="predictions",
-    constant_data_group="predictions_constant_data",
+    constant_data_group="constant_data",
     join_on="obs_ind",
 ) -> pl.LazyFrame:
     """
@@ -193,8 +193,8 @@ def add_epred_draws(
         "posterior_predictive", or custom). Default "predictions".
     constant_data_group : str
         InferenceData group name for the covariate grid that aligns with the
-        prediction draws. Default "predictions_constant_data". Set this parameter
-        if your DataTree uses a different naming convention.
+        prediction draws. Default "constant_data" (ArviZ 1.x convention). Set
+        this parameter if your DataTree uses a different naming convention.
     join_on : str | list[str]
         Column(s) to join newdata to the draws on. Default "obs_ind".
     

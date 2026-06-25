@@ -14,32 +14,47 @@ With older ArviZ versions or the current 1.0 approach, you typically manually ex
 ```{python}
 import arviz as az
 import numpy as np
+from xarray import DataArray
 
-# Let's say we have an InferenceData object from PyMC
-# The old approach is quite verbose and requires lots of manipulation
+# Create simulated posterior draws for demonstration
+np.random.seed(42)
+chains, draws = 4, 1000
+n_groups = 4
 
-# Simple example of a model with posterior draws
-# idata = az.from_netcdf("model.nc")  # Load your existing model
+beta_draws = np.random.normal(1, 0.2, (chains, draws, n_groups))
+sigma_draws = np.random.normal(0.8, 0.1, (chains, draws))
+
+posterior_data = {
+    "beta": DataArray(beta_draws, dims=["chain", "draw", "groups"]),
+    "sigma": DataArray(sigma_draws, dims=["chain", "draw"]),
+}
+
+dt = az.from_dict(
+    {"posterior": posterior_data},
+    coords={"groups": [f"group_{i}" for i in range(n_groups)]},
+    dims={"beta": ["groups"]},
+)
+
+print(f"DataTree created with {n_groups} groups, {chains} chains, {draws} draws")
 
 # Manual extraction - this is typical of ArviZ 1.0 approaches:
 def extract_with_arviz_approach():
-    # Accessing parameter values manually 
-    # samples = idata.posterior
-    
+    # Accessing parameter values manually
+    samples = dt.posterior
+
     # For scalar parameters you can access directly
-    # sigma = samples["sigma"].values  # Shape: (chains, draws)
-    
+    sigma = samples["sigma"]  # Returns a DataArray with dims (chain, draw)
+
     # For array parameters, you need explicit dimension handling
-    # beta = samples["beta"]  # This returns a DataArray with dimensions
-    
-    # The issue becomes clear when trying to work with multiple related variables:
-    # You have to manage manual coordinate alignment
-    
+    beta = samples["beta"]  # Returns a DataArray with dims (chain, draw, groups)
+
     print("Manual approach required:")
-    print("- Manual slicing of dimensions") 
+    print("- Manual slicing of dimensions")
     print("- Explicit handling of coordinates")
     print("- Risk of errors in joining different-sized arrays")
-    print("- Duplicate information across observation indices")
+
+    print(f"\nSigma shape: {sigma.values.shape}")
+    print(f"Beta shape: {beta.values.shape}")
 
 extract_with_arviz_approach()
 ```
@@ -75,52 +90,39 @@ import tidydraws as td
 import polars as pl
 
 # The tidydraws approach is much more explicit:
-def extract_with_tidydraws_approach():
-    print("tidydraws approach:")
-    print("- Explicit parameter space extraction via spread_draws()")
-    print("- Separation of prediction space with add_epred_draws()")
-    print("- Declarative syntax for dimensions: \"beta[groups]\"")
-    
-    # You can extract in one line:
-    # parameter_draws = td.spread_draws(dt, "beta[groups]", "intercept[groups]")
-    
-    # And then for predictions:
-    # prediction_draws = td.add_epred_draws(dt, newdata=None, var_name="mu")
-    
-    print("\nThis results in:")
-    print("- 16,000 clean parameter rows (no duplication)")
-    print("- 320,000 prediction rows (but parameters not duplicated)")
-    print("- Explicit semantic separation")
-
-extract_with_tidydraws_approach()
+# Extract parameters in one line — no manual slicing or indexing
+beta_lf = td.spread_draws(dt, "beta[groups]")
+print("tidydraws extraction:")
+print(f"  Shape: {beta_lf.collect().shape}")
+print(f"  Columns: {beta_lf.collect().columns}")
+print(f"\nThis results in {beta_lf.collect().shape[0]} clean parameter rows")
 ```
 
 ### Example: Parameter Space Comparison
 
 ```{python}
-# Show what the extraction looks like in practice  
-def parameter_extraction_demo():
-    print("\n--- COMPARISON EXAMPLE ---")
-    
-    # Traditional: 
-    # sigma_samples = idata.posterior["sigma"]
-    # beta_samples = idata.posterior["beta"]
-    # ... manually join coordinates
-    
-    # tidydraws:
-    # Beta draws with dimensions
-    # beta_draws = td.spread_draws(dt, "beta[groups]")
-    
-    print("Traditional approach:")
-    print("- Requires manual indexing and coordinate management")
-    print("- Risk of joining mismatched dimensions")
-    
-    print("\ntidydraws approach:")
-    print("- String specs handle dimension parsing automatically")  
-    print("- Cross-dim join warnings to spot issues early")
-    print("- Lazy evaluation prevents unnecessary data loading")
+# Now let's also add prior draws for comparison
+prior_data = {
+    "beta": DataArray(np.random.normal(0, 0.5, (chains, draws, n_groups)),
+                      dims=["chain", "draw", "groups"]),
+    "sigma": DataArray(np.random.normal(1.0, 0.2, (chains, draws)),
+                      dims=["chain", "draw"]),
+}
 
-parameter_extraction_demo()
+dt_with_prior = az.from_dict(
+    {"posterior": posterior_data, "prior": prior_data},
+    coords={"groups": [f"group_{i}" for i in range(n_groups)]},
+    dims={"beta": ["groups"]},
+)
+
+print("DataTree with both posterior and prior groups")
+
+# Compare beta from posterior vs. prior using tidydraws
+beta_compare = td.spread_draws_compare(dt_with_prior, "beta[groups]")
+print("Posterior vs. Prior comparison of beta:")
+print(f"  Shape: {beta_compare.collect().shape}")
+print(f"  Column structure: {beta_compare.collect().columns}")
+print(f"  Source values: {beta_compare.collect()['source'].unique().to_list()}")
 ```
 
 ## Side-by-Side Comparison: Real Use Cases
@@ -131,47 +133,78 @@ Let's compare specific scenarios for real-world plotting needs:
 
 ```{python}
 # ArviZ approach (before):
-def arviz_forest_plot_example():
-    print("ArviZ Forest Plot - Manual Steps:")
-    print("1. Extract parameter arrays")
-    print("2. Manually handle dimensions")  
-    print("3. Convert to DataFrame with manual indexing")
-    print("4. Stack/reshape data for plotting")
-    
-arviz_forest_plot_example()
+print("ArviZ Forest Plot — Manual Steps:")
+print("  1. Extract parameter arrays: idata.posterior['beta']")
+print("  2. Manually handle dimensions: .values, stack, reshape")
+print("  3. Convert to DataFrame with manual indexing")
+print("  4. Stack/reshape data for plotting")
 
 # tidydraws approach:
-def tidy_forest_plot_example():
-    print("\ntidydraws Forest Plot:")
-    print("1. Extract: beta_draws = spread_draws(dt, 'beta[groups]')")
-    print("2. Plot directly with stat_pointinterval(beta_draws)")
-    print("3. No manual reshaping needed")  
-    print("4. Clear separation between parameters and plotting")
-    
-tidy_forest_plot_example()
+print("\ntidydraws Forest Plot — One call:")
+beta_lf = td.spread_draws(dt, "beta[groups]")
+result = beta_lf.collect()
+print(f"  Shape: {result.shape}")
+print(f"  Columns: {result.columns}")
+print("  Ready to plot directly — no manual reshaping needed")
 ```
 
 ### Posterior Predictive Fit
 
 ```{python}
-# ArviZ approach for predictive plots:
-def arviz_predictive_approach():
-    print("\n--- ARVIZ PREDICTIVE APPROACH ---")
-    print("- Join prediction data with covariates manually")
-    print("- Handle duplicate information between parameter/prediction space") 
-    print("- Risk of index mismatches and dimension errors")
+# Create predictions to demonstrate the prediction space
+# Simulate mu values for each observation
+total_obs = 80
+obs_ind = np.arange(total_obs)
 
-arviz_predictive_approach()
+# Generate random covariate values for each observation index
+x_vals = np.random.normal(10, 5, total_obs)
+group_assignments = np.random.randint(0, n_groups, total_obs)
+
+# Use the original parameter arrays (beta_draws, sigma_draws from cell 1)
+mu_draws = np.zeros((chains, draws, total_obs))
+for i in range(total_obs):
+    g = group_assignments[i]
+    mu_draws[:, :, i] = sigma_draws[:, :]  + beta_draws[:, :, g] * x_vals[i]
+
+y_draws = mu_draws + np.random.normal(0, 0.3, (chains, draws, total_obs))
+
+# Build a DataTree with predictions + constant data
+# Note: ArviZ 1.x uses "constant_data" (not "predictions_constant_data") as the group name
+pred_dt = az.from_dict(
+    {
+        "posterior": posterior_data,
+        "predictions": {
+            "mu": DataArray(mu_draws, dims=["chain", "draw", "obs_ind"]),
+        },
+        "constant_data": {
+            "x": DataArray(x_vals, dims=["obs_ind"]),
+            "group": DataArray(group_assignments, dims=["obs_ind"]),
+        },
+    },
+    coords={
+        "groups": [f"group_{i}" for i in range(n_groups)],
+        "obs_ind": list(range(total_obs)),
+    },
+    dims={"beta": ["groups"], "x": ["obs_ind"], "group": ["obs_ind"]},
+    pred_dims={"mu": ["obs_ind"]},
+)
+
+print("Prediction DataTree created")
+
+# ArviZ approach for predictive plots:
+print("\nArviZ approach — manual join:")
+print("  - Join prediction data with covariates manually")
+print("  - Handle duplicate information between parameter/prediction space")
 
 # tidydraws approach:
-def tidy_predictive_approach():
-    print("\n--- TIDYDRAWES PREDICTIVE APPROACH ---")
-    print("- Parameter space: spread_draws(dt, 'beta[groups]')")
-    print("- Prediction space: add_epred_draws(dt, newdata=None, var_name='mu')")
-    print("- Clear semantic separation")
-    print("- Lazy filtering to control memory usage")
-    
-tidy_predictive_approach()
+# Pass constant_data_group="constant_data" since that's the ArviZ convention
+print("\ntidydraws approach — one call:")
+pred_draws = td.add_epred_draws(pred_dt, newdata=None, var_name="mu",
+                                constant_data_group="constant_data")
+pred_result = pred_draws.collect()
+print(f"  Shape: {pred_result.shape}")
+print(f"  Columns: {pred_result.columns}")
+print(f"  Rows: chains({chains}) × draws({draws}) × obs({total_obs}) = {chains * draws * total_obs}")
 ```
 
 ## Performance and Memory Advantages
@@ -226,46 +259,53 @@ When migrating from ArviZ approaches to `tidydraws`:
 ### Phase 1: Understanding Parameter Space Extraction
 
 ```{python}
-# Example of simple migration from:
-# beta = samples["beta"] 
-# ... manual handling
-# To:
-# beta_draws = td.spread_draws(dt, "beta[groups]")
-print("Migration Step 1:")
-print("- Replace dimension-indexing with string specs")
-print("- Understand that 'beta[groups]' becomes a proper Polars DataFrame")
+print("Migration Step 1: Replace dimension-indexing with string specs")
+
+# Before: manual indexing
+beta_manual = dt.posterior["beta"].values
+print(f"ArviZ manual shape: {beta_manual.shape}")
+
+# After: tidydraws string specs
+beta_draws = td.spread_draws(dt, "beta[groups]")
+beta_tidy = beta_draws.collect()
+print(f"tidydraws shape: {beta_tidy.shape}")
+print(f"tidydraws columns: {beta_tidy.columns}")
 ```
 
 ### Phase 2: Separating Parameter and Prediction Spaces
 
 ```{python}
-# Before:
-# pred_data = make_prediction_table()  # Manual join
-# After:
-# parameter_space = td.spread_draws(dt, "beta[groups]")
-# prediction_space = td.add_epred_draws(dt, newdata=None, var_name="mu")
+print("Migration Step 2: Separate data extractions by semantic level")
 
-print("\nMigration Step 2:")  
-print("- Separate data extractions by semantic level")
-print("- Use spread_draws() for parameters") 
-print("- Use add_epred_draws() for predictions")
+# Parameter space
+parameter_space = td.spread_draws(dt, "beta[groups]")
+print(f"Parameter space: {parameter_space.collect().shape}")
+
+# Prediction space (using the pred_dt we created above)
+prediction_space = td.add_epred_draws(pred_dt, newdata=None, var_name="mu",
+                                      constant_data_group="constant_data")
+print(f"Prediction space: {prediction_space.collect().shape}")
+print("Clean semantic separation between parameters and predictions")
 ```
 
 ### Phase 3: Leveraging Lazy Evaluation
 
 ```{python}
-# Before (inefficient):
-# all_predictions = get_all_predictions()
-# filtered = all_predictions[all_predictions['group'] == 0] 
-#
-# After (efficient):
-# pred_draws = td.add_epred_draws(dt, newdata=None, var_name="mu")
-# group0_pred = pred_draws.filter(pl.col("group") == 0).collect()
+print("Migration Step 3: Adopt lazy evaluation patterns")
 
-print("\nMigration Step 3:")
-print("- Adopt lazy evaluation patterns")
-print("- Filter before collect() for performance")
-print("- Use predicate pushdown for optimization")
+# Before (inefficient) - not possible to filter before materializing
+# all_predictions = get_all_predictions()
+# filtered = all_predictions[all_predictions['group'] == 0]
+
+# After (efficient)
+pred_lf = td.add_epred_draws(pred_dt, newdata=None, var_name="mu",
+                              constant_data_group="constant_data")
+
+# Filter BEFORE collect() — predicate pushdown
+group0_pred = pred_lf.filter(pl.col("group") == 0).collect()
+print(f"Filtered (group == 0): {group0_pred.shape}")
+total_pred = pred_lf.collect()
+print(f"Unfiltered: {total_pred.shape}")
 ```
 
 ## Summary: Why tidydraws Wins

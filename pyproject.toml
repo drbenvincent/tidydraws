@@ -10,6 +10,7 @@ dependencies = [
     "arviz >=1.0",
     "xarray",
     "numpy",
+    "pyarrow>=24.0.0",
 ]
 
 [project.optional-dependencies]

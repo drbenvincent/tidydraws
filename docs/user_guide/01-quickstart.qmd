@@ -11,114 +11,189 @@ Plotting MCMC output in Python today requires manual wrangling of `arviz.Inferen
 objects: slicing xarray dimensions, iterating over groups, managing coordinate alignment.
 This is imperative, boilerplate-heavy, and error-prone.
 
-R's [`tidybayes`](https://github.com/TuringLang/tidybayes) solved this elegantly by providing a data transformation layer that respects the semantics of parameter space vs. prediction space. `tidydraws` brings the same philosophy to Python — using **Polars LazyFrames** for efficient data processing.
+R's [`tidybayes`](https://github.com/TuringLang/tidybayes) solved this elegantly by providing a data transformation layer that respects the semantics of parameter space vs. prediction space. `tidydraws` brings the same philosophy to Python — using **Polars LazyFrames** so you only pay the materialisation cost when you're ready.
 
-## Getting Started
+## Creating a Sample Bayesian Model
 
-First, import the necessary libraries:
+In this example, we'll work with synthetic data from a hierarchical linear model to demonstrate `tidydraws` capabilities. First, let's create a simulated dataset:
 
 ```{python}
+# Create sample data for demonstration
 import numpy as np
 import arviz as az
+import pandas as pd
+
+np.random.seed(42)
+
+# Simulate synthetic data for a hierarchical model
+n_groups = 4
+n_obs_per_group = 20
+obs_ind = []
+group_labels = []
+
+for group in range(n_groups):
+    for i in range(n_obs_per_group):
+        obs_ind.append(i)
+        group_labels.append(group)
+
+obs_df = pd.DataFrame({"x": np.random.normal(10, 5, n_obs_per_group * n_groups),
+                       "group": group_labels,
+                       "y": np.random.normal(0, 2, n_obs_per_group * n_groups)})
+
+# Generate a simple dataset
+data_dict = {
+    "obs_ind": obs_ind,
+    "group": group_labels,
+    "x": obs_df["x"].values,
+    "y": obs_df["y"].values,
+}
+
+print("Generated synthetic dataset with:")
+print(f"- {len(data_dict['x'])} observations")
+print(f"- {n_groups} groups")
+```
+
+## Setting up a Bayesian Model
+
+While in a real scenario you would have used PyMC to sample an actual posterior, for this demonstration we'll create simulated
+model data using ArviZ's DataTree interface.
+
+```{python}
+# Create simulated posterior draws with groups
+chains = 4
+draws = 1000
+
+# Simulate beta parameters per group (slope coefficients)
+beta_draws = np.random.normal(1, 0.2, (chains, draws, n_groups))
+
+# Simulate intercepts 
+intercept_draws = np.random.normal(0, 0.5, (chains, draws, n_groups))
+
+# Simulate sigma (error standard deviation)  
+sigma_draws = np.random.normal(0.8, 0.1, (chains, draws))
+
+# Create DataTree using ArviZ 1.0 interface
+from xarray import DataArray
+
+# Create datasets for posterior and prior
+posterior_data = {
+    "beta": DataArray(beta_draws, dims=["chain", "draw", "groups"]),
+    "intercept": DataArray(intercept_draws, dims=["chain", "draw", "groups"]),
+    "sigma": DataArray(sigma_draws, dims=["chain", "draw"])
+}
+
+# Create the DataTree
+dt = az.from_dict(
+    {"posterior": posterior_data},
+    coords={
+        "groups": [f"group_{i}" for i in range(n_groups)],
+        "obs_ind": list(range(len(obs_df)))
+    },
+    dims={
+        "beta": ["groups"],
+        "intercept": ["groups"],
+    }
+)
+
+print("Created ArviZ DataTree with the following structure:")
+print(f"- Chains: {chains}")
+print(f"- Draws: {draws}")
+print(f"- Groups: {dt.posterior.coords['groups'].values}")
+```
+
+## Extracting Draw Parameters
+
+Now we'll extract posterior draws using `spread_draws()` function. This is where tidydraws shines: parameters are extracted without duplication across observations.
+
+```{python}
 import tidydraws as td
 import polars as pl
-from xarray import DataArray
+
+# Extract posterior beta and intercept draws
+beta_draws = td.spread_draws(dt, "beta[groups]", "intercept[groups]")
+print("Posterior beta draws:")
+print(f"Shape: {beta_draws.collect().shape}")
+print("Columns:", beta_draws.collect().columns)
 ```
 
-Now let's create a simple simulation of our data to demonstrate how `tidydraws` works. Since we're making this documentation buildable, we'll skip some complex parts.
+## Comparing Posterior and Prior
+
+Let's now compare posterior with prior draws:
 
 ```{python}
-# Create simulated dataset for demonstration
-np.random.seed(42)
-n_groups = 4
-obs_ind = np.arange(80)  # 4 groups with 20 observations each
+# Create a mock prior (in practice you would have a proper prior InferenceData)
+# For this demo, we'll simulate some prior draws with different means
+prior_data = {
+    "beta": DataArray(np.random.normal(0.5, 0.3, (chains, draws, n_groups)), 
+                      dims=["chain", "draw", "groups"]),
+    "intercept": DataArray(np.random.normal(0.2, 0.6, (chains, draws, n_groups)), 
+                          dims=["chain", "draw", "groups"]),
+    "sigma": DataArray(np.random.normal(1.0, 0.15, (chains, draws)), 
+                      dims=["chain", "draw"])
+}
 
-# Create some data that would typically come from a model run
-n_obs = len(obs_ind)
-x_vals = np.random.normal(10, 5, n_obs)
+# Create a new DataTree with a prior group
+dt_with_prior = az.from_dict(
+    {"posterior": posterior_data, "prior": prior_data},
+    coords={
+        "groups": [f"group_{i}" for i in range(n_groups)],
+        "obs_ind": list(range(len(obs_df)))
+    },
+    dims={
+        "beta": ["groups"],
+        "intercept": ["groups"],
+    }
+)
 
-print("Created sample dataset for demonstration:")
-print(f"- Observations: {n_obs}")
-print(f"- Groups: {n_groups}")
+# Compare posterior vs. prior
+compare_draws = td.spread_draws_compare(dt_with_prior, "beta[groups]")
+print("Comparison of posterior and prior beta draws:")
+print(f"Shape: {compare_draws.collect().shape}")
 ```
 
-## Extracting Parameter Draws
+In this comparison, we're showing how `spread_draws_compare` can help with visualizing differences between parameter distributions.
 
-The most important part of tidydraws is how it cleanly extracts parameter draws:
+## Making a Forest Plot
+
+Let's create a simple forest plot to illustrate the parameter estimates:
 
 ```{python}
-# Example: extract beta parameters by group  
-# (this would come from an actual model/DataTree)
+# Collect for visualization 
+beta_df = beta_draws.collect()
 
-print("Using tidydraws, you can easily extract:")
-print("- Parameters (e.g., beta[groups], intercept[groups])") 
-print("- Predictions (e.g., mu) joined to observations")
+print("First few rows of beta draws:")
+print(beta_df.head(5))
 ```
 
-## Working with Multiple Groups
-
-One powerful feature is working with grouped data:
+Now let's make a basic forest plot:
 
 ```{python}
-# Grouped parameter extraction  
-def show_grouped_extraction():
-    print("\n--- GROUPED EXTRACTION EXAMPLE ---")
-    print("You can easily extract different groups:")
-    print("- beta_draws = spread_draws(dt, 'beta[groups]')")
-    print("- intercept_draws = spread_draws(dt, 'intercept[groups]')")
-    print("- sigma_draws = spread_draws(dt, 'sigma')  # scalar parameters")
+# Summarise the parameter draws for a forest plot
+beta_summary = (
+    beta_draws
+    .group_by("groups")
+    .agg([
+        pl.col("beta").quantile(0.055).alias("q5.5"),
+        pl.col("beta").quantile(0.5).alias("median"),
+        pl.col("beta").quantile(0.945).alias("q94.5"),
+    ])
+    .collect()
+)
+print("Beta parameter summary by group (89% HDI):")
+print(beta_summary)
 
-show_grouped_extraction()
+# In practice you would pass these draws to a plotting library.
+# The key point is that the tidydraws output is ready-to-use:
+print("\nForest plot data ready for visualization")
 ```
 
-## Prior and Posterior Comparison
+## Summary
 
-`tidydraws` makes it easy to compare what happens with different groups:
+This quickstart demonstrates how `tidydraws` makes it easy to work with MCMC draws in a tidy way: 
 
-```{python}
-# Show how you might compare groups differently
-def demonstrate_comparison():
-    print("\n--- COMPARISON APPROACH ---")
-    print("Parameter space (posterior draws):")
-    print("- Separate frames for different parameters") 
-    print("- Clean extraction without duplication")
-    
-    print("\nPrediction space:")
-    print("- Predictive draws joined to covariates") 
-    print("- Filtering before .collect() prevents memory issues")
-    
-demonstrate_comparison()
+1. **`spread_draws()`** extracts parameters into clean DataFrames without duplication
+2. **`spread_draws_compare()`** allows easy comparison between posterior and prior distributions
+3. **Lazy evaluation** lets you filter before collecting data
+
+The power of `tidydraws` is that it separates the parameter space (where parameters like beta and intercept live) from the prediction space (where mu, y_hat, and other predictions live). This clean separation avoids the issue in typical approaches where coefficient values get duplicated across all observations.
 ```
-
-## Visualization Pipeline
-
-The real power comes when you visualize:
-
-```{python}
-# Demonstration of visualization steps (conceptual)
-def show_viz_pipeline():
-    print("\n--- VISUALIZATION PIPELINE ---")
-    print("1. Extract parameters for forest plots")
-    print("   beta_draws = spread_draws(dt, 'beta[groups]')") 
-
-    print("\n2. Extract predictions for fits") 
-    print("   pred_draws = add_epred_draws(dt, newdata=covariate_grid, var_name='mu')")
-    
-    print("\n3. Apply filtering before collecting (for performance)") 
-    print("   group0_pred = pred_draws.filter(pl.col('group') == 0)")
-    print("   filtered_data = group0_pred.collect()")
-    
-show_viz_pipeline()
-```
-
-## Key Benefits
-
-The `tidydraws` approach offers several clear advantages:
-
-1. **Semantic Separation**: Parameters (like `beta`, `intercept`) vs predictions (like `mu`, `y_hat`)
-2. **No Data Duplication**: Parameters don't get repeated for every observation
-3. **Memory Efficient**: Lazy evaluation with predicate pushdown
-4. **Flexible Grouping**: Works with all arviz groups out of the box 
-5. **Compositional**: You can chain operations without materializing
-
-This separation between parameters and predictions allows for clean visualizations while maintaining computational efficiency through lazy evaluation.
