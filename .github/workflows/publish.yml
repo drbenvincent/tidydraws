@@ -28,8 +28,8 @@ jobs:
         run: uv build
       - name: Check the sdist installs and imports
         run: |
-          uv tool run --from venv --with venv -- python -m venv venv-sdist
-          venv-sdist/bin/python -m pip install dist/tidydraws*.tar.gz
+          uv venv venv-sdist
+          uv pip install --python venv-sdist/bin/python dist/tidydraws*.tar.gz
           echo "Checking import and version number (on release)"
           venv-sdist/bin/python -c "import tidydraws; assert tidydraws.__version__ == '${REF_NAME}' if '${REF_TYPE}' == 'tag' else tidydraws.__version__; print(tidydraws.__version__)"
         env:
@@ -37,8 +37,8 @@ jobs:
           REF_TYPE: ${{ github.ref_type }}
       - name: Check the bdist installs and imports
         run: |
-          python -m venv venv-bdist
-          venv-bdist/bin/python -m pip install dist/tidydraws*.whl
+          uv venv venv-bdist
+          uv pip install --python venv-bdist/bin/python dist/tidydraws*.whl
           echo "Checking import and version number (on release)"
           venv-bdist/bin/python -c "import tidydraws; assert tidydraws.__version__ == '${REF_NAME}' if '${REF_TYPE}' == 'tag' else tidydraws.__version__; print(tidydraws.__version__)"
         env:
