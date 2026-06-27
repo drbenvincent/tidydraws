@@ -118,21 +118,6 @@ This repo ships the [Great Docs Agent Skills](https://posit-dev.github.io/great-
 
 6. Push to your fork and create a pull request.
 
-## Project Structure
-
-- `tidydraws/` - Main package code
-- `tests/` - Test files
-- `docs/` - Documentation source files (Quarto format)
-- `pyproject.toml` - Project dependencies and configuration
-
-## Code Style
-
-We follow standard Python conventions with some specific guidelines:
-- Use type hints consistently
-- Follow Polars naming conventions for LazyFrame operations
-- Maintain compatibility with ArviZ 1.0 DataTree format
-- Keep functions pure and avoid side effects where possible
-
 ## Pull Request Guidelines
 
 - Reference relevant issues in your PR description 

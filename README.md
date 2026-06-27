@@ -86,20 +86,6 @@ cd tidydraws
 pip install -e .
 ```
 
-## Documentation
-
-See the [user guide](./docs/user_guide/) for tutorials, worked examples, and migration help.
-
-| Guide | Description |
-| --- | --- |
-| [01-quickstart](./docs/user_guide/01-quickstart.qmd) | 5-minute intro: extract tidy draws and plot with lets-plot |
-| [02-parameter-space](./docs/user_guide/02-parameter-space.qmd) | Forest plots, density plots, prior vs. posterior comparison |
-| [03-prediction-space](./docs/user_guide/03-prediction-space.qmd) | Posterior predictive fits, ribbons, credible intervals |
-| [04-migration-from-arviz](./docs/user_guide/04-migration-from-arviz.qmd) | Replacing ArviZ's imperative approach with tidydraws |
-| [05-backends](./docs/user_guide/05-backends.qmd) | The same plots rendered with lets-plot and plotnine |
-
-> The rendered docs site is at <https://drbenvincent.github.io/tidy-draws/>.
-
 ## Installation Options
 
 ```bash
@@ -115,10 +101,6 @@ uv add "tidydraws[plotnine]"
 # Both backends
 uv add "tidydraws[all]"
 ```
-
-## Status
-
-**v0.1.0a0** — Data layer in development. `spread_draws()`, `add_epred_draws()`, and core utilities are underway. Documentation is the primary deliverable.
 
 ---
 
