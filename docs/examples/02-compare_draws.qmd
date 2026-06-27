@@ -11,8 +11,8 @@ status: stable
 This example uses the same grouped regression data as the other examples, samples from the model prior before fitting, then compares those prior draws with the fitted posterior. That gives `compare_draws()` real prior draws and real posterior draws from the same PyMC model.
 
 ```{python}
-#| code-fold: true
-#| cache: true
+# | code-fold: true
+# | cache: true
 from pathlib import Path
 import sys
 
@@ -109,7 +109,7 @@ compare.head()
 The prior is deliberately broad; after seeing the data, the posterior concentrates around the group-specific slopes.
 
 ```{python}
-#| fig-cap: "Prior vs posterior density of group-specific slopes, pooled across groups."
+# | fig-cap: "Prior vs posterior density of group-specific slopes, pooled across groups."
 (
     ggplot(compare.to_pandas(), aes("beta", fill="source"))
     + geom_density(alpha=0.5)
@@ -128,7 +128,7 @@ The prior is deliberately broad; after seeing the data, the posterior concentrat
 ### Prior vs posterior by group
 
 ```{python}
-#| fig-cap: "Prior vs posterior density of group-specific slopes, faceted by group."
+# | fig-cap: "Prior vs posterior density of group-specific slopes, faceted by group."
 (
     ggplot(compare.to_pandas(), aes("beta", fill="source"))
     + geom_density(alpha=0.5)
@@ -150,9 +150,10 @@ The prior is deliberately broad; after seeing the data, the posterior concentrat
 A different cut: 89% intervals per group, dodged by source. The posterior intervals contract toward the true slopes while the prior intervals remain wide.
 
 ```{python}
-#| fig-cap: "Prior vs posterior 89% credible intervals of group-specific slopes."
+# | fig-cap: "Prior vs posterior 89% credible intervals of group-specific slopes."
 ci = (
-    compare.group_by("groups", "source")
+    compare
+    .group_by("groups", "source")
     .agg(
         pl.col("beta").quantile(0.055).alias("lower"),
         pl.col("beta").median().alias("median"),
@@ -163,7 +164,9 @@ ci = (
 
 (
     ggplot(ci.to_pandas(), aes("groups", "median", color="source"))
-    + geom_pointrange(aes(ymin="lower", ymax="upper"), position=position_dodge(0.5), size=0.8)
+    + geom_pointrange(
+        aes(ymin="lower", ymax="upper"), position=position_dodge(0.5), size=0.8
+    )
     + geom_pointrange(
         data=truth.to_pandas(),
         mapping=aes("groups", "beta_true", ymin="beta_true", ymax="beta_true"),
@@ -171,7 +174,12 @@ ci = (
         size=0.7,
     )
     + geom_hline(yintercept=0, linetype="dashed", color="#888888")
-    + labs(x="group", y="beta (89% CrI)", color="source", title="Prior vs posterior credible intervals")
+    + labs(
+        x="group",
+        y="beta (89% CrI)",
+        color="source",
+        title="Prior vs posterior credible intervals",
+    )
     + theme_minimal()
 )
 ```

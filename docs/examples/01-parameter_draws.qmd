@@ -23,8 +23,8 @@ Request several variables in one call and `tidydraws` joins them: variables shar
 The data are generated from four groups with deliberately different intercepts and slopes, including one negative slope. That separation makes the posterior plots diagnose real group differences rather than noise around one common line.
 
 ```{python}
-#| code-fold: true
-#| cache: true
+# | code-fold: true
+# | cache: true
 from pathlib import Path
 import sys
 
@@ -68,12 +68,14 @@ truth = workflow.truth
 The observed data and true generating lines show the group separation before fitting.
 
 ```{python}
-#| fig-cap: "Simulated observed data with true group-specific regression lines."
+# | fig-cap: "Simulated observed data with true group-specific regression lines."
 (
     ggplot(observed.sort(["groups", "x"]).to_pandas(), aes("x", "y"))
     + geom_point(aes(color="groups"), alpha=0.65, size=2.0)
     + geom_line(aes(y="mu_true", color="groups"), size=1.0)
-    + labs(x="x", y="y", color="group", title="Observed data from known group differences")
+    + labs(
+        x="x", y="y", color="group", title="Observed data from known group differences"
+    )
     + theme_minimal()
 )
 ```
@@ -135,7 +137,7 @@ beta_df.head()
 The dashed red lines are the true slopes used to simulate the data.
 
 ```{python}
-#| fig-cap: "Posterior density of group-specific slopes, with true values marked."
+# | fig-cap: "Posterior density of group-specific slopes, with true values marked."
 (
     ggplot(beta_df.to_pandas(), aes("beta", fill="groups"))
     + geom_density(alpha=0.45)
@@ -157,7 +159,7 @@ The dashed red lines are the true slopes used to simulate the data.
 Summarise each group with one central 89% interval. The red points are the true slopes used to generate the observed data.
 
 ```{python}
-#| fig-cap: "Posterior 89% intervals of group-specific slopes, with true values in red."
+# | fig-cap: "Posterior 89% intervals of group-specific slopes, with true values in red."
 beta_forest = interval_summary(beta_df, "beta", "groups", [0.89])
 
 (
@@ -184,14 +186,17 @@ beta_forest = interval_summary(beta_df, "beta", "groups", [0.89])
 Each row below has 100 equally likely dots from the posterior slope distribution for a group. This is a frequency-format alternative to density plots.
 
 ```{python}
-#| fig-cap: "Quantile dotplot of group-specific slopes: each dot represents 1% posterior mass."
+# | fig-cap: "Quantile dotplot of group-specific slopes: each dot represents 1% posterior mass."
 quantiles = np.linspace(0.005, 0.995, 100)
-group_levels = beta_df.select("groups").unique().sort("groups").get_column("groups").to_list()
+group_levels = (
+    beta_df.select("groups").unique().sort("groups").get_column("groups").to_list()
+)
 quantile_dots = pl.DataFrame([
     {
         "groups": group_name,
         "beta": float(
-            beta_df.filter(pl.col("groups") == group_name)
+            beta_df
+            .filter(pl.col("groups") == group_name)
             .get_column("beta")
             .quantile(q)
         ),
@@ -220,7 +225,7 @@ quantile_dots = pl.DataFrame([
 Because every row keeps its `chain` and `draw`, derived quantities are ordinary dataframe operations. Here each contrast is `beta[group] - beta[North]` within draw, summarised with one 89% interval.
 
 ```{python}
-#| fig-cap: "Derived slope contrasts against North, with true contrasts in red."
+# | fig-cap: "Derived slope contrasts against North, with true contrasts in red."
 reference_group = "North"
 wide_beta = beta_df.pivot(index=["chain", "draw"], on="groups", values="beta")
 contrast_draws = pl.concat([
@@ -234,7 +239,9 @@ contrast_draws = pl.concat([
     if group_name != reference_group
 ])
 contrast_forest = interval_summary(contrast_draws, "contrast", "contrast_name", [0.89])
-reference_truth = truth.filter(pl.col("groups") == reference_group).get_column("beta_true")[0]
+reference_truth = truth.filter(pl.col("groups") == reference_group).get_column(
+    "beta_true"
+)[0]
 truth_contrasts = truth.filter(pl.col("groups") != reference_group).select(
     (pl.col("groups") + " - " + pl.lit(reference_group)).alias("contrast_name"),
     (pl.col("beta_true") - reference_truth).alias("contrast_true"),
@@ -250,7 +257,11 @@ truth_contrasts = truth.filter(pl.col("groups") != reference_group).select(
         size=2.4,
     )
     + geom_hline(yintercept=0, linetype="dashed", color="#888888")
-    + labs(x="contrast", y="beta difference", title="Posterior slope contrasts against North")
+    + labs(
+        x="contrast",
+        y="beta difference",
+        title="Posterior slope contrasts against North",
+    )
     + theme_minimal()
 )
 ```
@@ -260,7 +271,7 @@ truth_contrasts = truth.filter(pl.col("groups") != reference_group).select(
 Request `beta[groups]` and the scalar `sigma` together: `sigma` is broadcast onto every `beta[groups]` row, so you can colour one by the other directly.
 
 ```{python}
-#| fig-cap: "Posterior slopes by group, coloured by each draw's residual sigma."
+# | fig-cap: "Posterior slopes by group, coloured by each draw's residual sigma."
 mixed = td.parameter_draws(dt, "beta[groups]", "sigma")
 
 (
@@ -273,7 +284,12 @@ mixed = td.parameter_draws(dt, "beta[groups]", "sigma")
         size=2.0,
     )
     + scale_color_gradient(low="steelblue", high="firebrick")
-    + labs(x="group", y="beta", color="sigma", title="Slope draws coloured by residual scale")
+    + labs(
+        x="group",
+        y="beta",
+        color="sigma",
+        title="Slope draws coloured by residual scale",
+    )
     + theme_minimal()
 )
 ```
@@ -284,13 +300,26 @@ mixed = td.parameter_draws(dt, "beta[groups]", "sigma")
 `tidydraws` returns a Polars `DataFrame`; `.to_pandas()` is the only bridge. The same forest-plot frame renders identically with [plotnine](https://plotnine.org/) as with lets-plot — swap the import, keep the geoms.
 
 ```{python}
-#| fig-cap: "The 89% slope forest plot above, rendered with plotnine."
-from plotnine import ggplot, aes, geom_hline, geom_point, geom_pointrange, labs, theme_minimal
+# | fig-cap: "The 89% slope forest plot above, rendered with plotnine."
+from plotnine import (
+    ggplot,
+    aes,
+    geom_hline,
+    geom_point,
+    geom_pointrange,
+    labs,
+    theme_minimal,
+)
 
 (
     ggplot(beta_forest.to_pandas(), aes("groups", "median"))
     + geom_pointrange(aes(ymin="lower", ymax="upper"), color="steelblue", size=0.8)
-    + geom_point(data=truth.to_pandas(), mapping=aes("groups", "beta_true"), color="firebrick", size=2.0)
+    + geom_point(
+        data=truth.to_pandas(),
+        mapping=aes("groups", "beta_true"),
+        color="firebrick",
+        size=2.0,
+    )
     + geom_hline(yintercept=0, linetype="dashed", color="#888888")
     + labs(x="group", y="beta", title="Posterior slope forest plot (plotnine)")
     + theme_minimal()

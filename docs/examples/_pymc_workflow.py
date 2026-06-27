@@ -38,23 +38,19 @@ def simulate_grouped_regression(seed: int = 2026) -> WorkflowData:
     y = rng.normal(mu_true, sigma_true)
     group = np.array(group_names, dtype=object)[group_idx]
 
-    observed = pl.DataFrame(
-        {
-            "obs_ind": obs_ind,
-            "groups": group,
-            "group_idx": group_idx,
-            "x": x,
-            "mu_true": mu_true,
-            "y": y,
-        }
-    )
-    truth = pl.DataFrame(
-        {
-            "groups": group_names,
-            "intercept_true": intercept_true,
-            "beta_true": beta_true,
-        }
-    )
+    observed = pl.DataFrame({
+        "obs_ind": obs_ind,
+        "groups": group,
+        "group_idx": group_idx,
+        "x": x,
+        "mu_true": mu_true,
+        "y": y,
+    })
+    truth = pl.DataFrame({
+        "groups": group_names,
+        "intercept_true": intercept_true,
+        "beta_true": beta_true,
+    })
     return WorkflowData(
         observed=observed,
         truth=truth,
@@ -70,7 +66,8 @@ def interval_summary(data: pl.DataFrame, value: str, by, probs) -> pl.DataFrame:
     for prob in probs:
         tail = (1 - prob) / 2
         pieces.append(
-            data.group_by(by)
+            data
+            .group_by(by)
             .agg(
                 pl.col(value).quantile(tail).alias("lower"),
                 pl.col(value).median().alias("median"),
