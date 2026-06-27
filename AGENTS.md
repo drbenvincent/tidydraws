@@ -15,6 +15,7 @@ tidydraws is a tidybayes-inspired data layer for Bayesian visualisation in Pytho
 5. **Row counts are the primary test.** `parameter_draws(dt, "beta[groups]")` must return exactly `chains × draws × groups` rows, no duplication.
 6. **No star imports in docs or examples.** Import the exact plotting functions used (for example, `from lets_plot import ggplot, aes, geom_line`) so rendered examples keep an explicit namespace contract.
 7. **Run `make precommit` before every commit.** This runs prek hooks (linting, formatting, type-checking) on all modified files. Skipping it will cause CI to red — and the pre-commit hook itself if configured.
+8. **Never commit or push without the user's explicit direction or permission.** Eager commits bypass the review gate. Stage edits and wait for the user to say "commit + push" (or a variant). `Commit` is not an action you take independently — it's a handoff.
 
 ---
 
