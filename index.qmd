@@ -13,8 +13,10 @@ A tidybayes-inspired data layer for declarative Bayesian visualisation in Python
 | [`compare_draws()`](docs/examples/compare_draws.qmd) | comparison | prior vs posterior, intervals |
 
 ```{python}
-# | code-fold: true
-# | cache: true
+# fmt: off
+#| code-fold: true
+#| cache: true
+# fmt: on
 from pathlib import Path
 import sys
 
