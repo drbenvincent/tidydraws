@@ -71,7 +71,7 @@ dt = az.from_dict(
 
 ```{python}
 pred = td.add_epred_draws(dt, newdata=None, var_name="mu",
-                          constant_data_group="constant_data").collect()
+                          constant_data_group="constant_data")
 pred.head()
 ```
 
@@ -105,9 +105,9 @@ summary = (
 )
 ```
 
-## Lazy Filtering Before Collect
+## Filtering Before Plotting
 
-Because `add_epred_draws()` returns a `LazyFrame`, you can filter **before** materialising — useful when the full prediction space is large.
+Because `add_epred_draws()` returns an eager `DataFrame`, you can filter **before** plotting — useful when the full prediction space is large.
 
 ```{python}
 #| fig-cap: "Posterior predictive fit for group 0 only."
@@ -116,7 +116,6 @@ group0 = (
     td.add_epred_draws(dt, newdata=None, var_name="mu",
                        constant_data_group="constant_data")
     .filter(pl.col("group") == 0)
-    .collect()
 )
 
 g0_summary = (
@@ -143,7 +142,7 @@ g0_summary = (
 
 - **`add_epred_draws()`** joins prediction draws to covariates — one tidy row per chain × draw × observation.
 - **Parameter space is excluded** from prediction frames, avoiding duplication.
-- **Lazy filtering** lets you subset before `.collect()` to control memory.
+- **Filtering** the returned `DataFrame` with `.filter()` lets you subset before plotting.
 - The tidy frame plugs straight into lets-plot `geom_ribbon` / `geom_line` for posterior predictive fits.
 
 See [Plotting Backends](05-backends.qmd) for the same fit rendered with plotnine, and [Migration from ArviZ](04-migration-from-arviz.qmd) for the before/after comparison.

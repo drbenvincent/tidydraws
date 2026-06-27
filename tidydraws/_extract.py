@@ -43,31 +43,31 @@ def _parse_var_spec(spec: str) -> Tuple[str, List[str]]:
 
     return var_name, dims
 
-def _datatree_group_to_lazy(dt, group: str) -> pl.LazyFrame:
+def _datatree_group_to_df(dt, group: str) -> pl.DataFrame:
     """
-    Convert a DataTree group to a Polars LazyFrame containing all coordinates and variables.
+    Convert a DataTree group to a Polars DataFrame containing all coordinates and variables.
 
-    Warning: If the group contains many variables with different dimensions, 
+    Warning: If the group contains many variables with different dimensions,
     xarray's to_dataframe() can create a very large sparse DataFrame.
     """
     if group not in dt.children:
         raise KeyError(f"Group '{group}' not found in DataTree.")
 
     ds = dt.children[group].to_dataset()
-    
+
     # If there are no data variables, we just want the coordinates.
     # to_dataframe() requires at least one data variable; otherwise it fails.
     if len(ds.data_vars) == 0:
         df = ds.coords.to_dataframe().reset_index()
     else:
-        # Convert xarray Dataset to pandas DataFrame, then to Polars LazyFrame
+        # Convert xarray Dataset to pandas DataFrame, then to Polars DataFrame
         df = ds.to_dataframe().reset_index()
-        
-    return pl.from_pandas(df).lazy()
 
-def _align_dims(frames: List[pl.LazyFrame], chain_dim: str = "chain", draw_dim: str = "draw") -> pl.LazyFrame:
+    return pl.from_pandas(df)
+
+def _align_dims(frames: List[pl.DataFrame], chain_dim: str = "chain", draw_dim: str = "draw") -> pl.DataFrame:
     """
-    Combine multiple LazyFrames by joining on shared dimensions.
+    Combine multiple DataFrames by joining on shared dimensions.
 
     If frames share only (chain, draw), it performs a cross-join (broadcasting).
     """
@@ -75,16 +75,13 @@ def _align_dims(frames: List[pl.LazyFrame], chain_dim: str = "chain", draw_dim: 
         raise ValueError("No frames provided for alignment.")
 
     result = frames[0]
-    
+
     for i in range(1, len(frames)):
         next_frame = frames[i]
-        
+
         # Find common columns (these are our shared dimensions)
-        # Use collect_schema().names() to avoid PerformanceWarning from .columns
-        cols_result = result.collect_schema().names()
-        cols_next = next_frame.collect_schema().names()
-        common_cols = list(set(cols_result).intersection(set(cols_next)))
-        
+        common_cols = list(set(result.columns).intersection(set(next_frame.columns)))
+
         # We expect at least chain and draw to be present
         if chain_dim not in common_cols or draw_dim not in common_cols:
             raise RuntimeError(
@@ -110,29 +107,70 @@ def spread_draws(
     group: str = "posterior",
     chain_dim: str = "chain",
     draw_dim: str = "draw",
-) -> pl.LazyFrame:
+) -> pl.DataFrame:
     """
-    Extract posterior draws for one or more variables into a tidy Polars LazyFrame.
+    Extract posterior draws for one or more variables into a tidy Polars DataFrame.
+
+    Parameters
+    ----------
+    dt : xr.DataTree
+        ArviZ DataTree object (xarray.DataTree) from PyMC sampling.
+    *var_specs : str
+        Variable specifications in the form "var_name" for scalar variables,
+        or "var_name[dim1, dim2, ...]" for array variables. Supports nested/multi-dimensional
+        specifications. The bracketed dimension names must match coordinate names in the
+        InferenceData dataset.
+    group : str
+        Which InferenceData group to extract from (e.g., "posterior", "prior").
+        Default "posterior".
+    chain_dim, draw_dim : str
+        Names of the chain and draw dimensions.
+
+    Returns
+    -------
+    pl.DataFrame
+        Tidy DataFrame with columns: chain, draw, [named dims...], [var_names...]
+        One row per unique (chain, draw, [dim combo]).
+
+    Examples
+    --------
+    # Scalar parameter (no duplication)
+    spread_draws(dt, "sigma")
+    # -> columns: chain, draw, sigma
+    # -> 4 x 1000 = 4,000 rows
+
+    # Array parameter spread over a named dim
+    spread_draws(dt, "beta[groups]", "intercept[groups]")
+    # -> columns: chain, draw, groups, beta, intercept
+    # -> 4 x 1000 x 4 = 16,000 rows (NOT 320,000)
+
+    # Mix of scalar and array (sigma broadcast-joined to group-level params)
+    spread_draws(dt, "beta[groups]", "sigma")
+    # -> columns: chain, draw, groups, beta, sigma
+    # -> 4 x 1000 x 4 = 16,000 rows; sigma repeated per group (explicit and expected)
+
+    # Different groups (prior vs posterior)
+    spread_draws(dt, "beta[groups]", group="prior")
+    # -> extract prior draws for beta
+
+    # Nested dimensions
+    spread_draws(dt, "gamma[time, group]")
+    # -> columns: chain, draw, time, group, gamma
     """
     if group not in dt.children:
         raise KeyError(f"Group '{group}' not found in DataTree.")
 
     ds = dt.children[group].to_dataset()
-    
-    # Ensure chain and draw dimensions are named as requested
-    # (In ArviZ 1.0 they usually are, but we allow overrides)
-    # This is tricky with xarray; typically we just rename the coords if needed.
-    # For now, we assume they match or are handled by the dataset.
 
     frames = []
     for spec in var_specs:
         var_name, dims = _parse_var_spec(spec)
-        
+
         if var_name not in ds.data_vars:
             raise KeyError(f"Variable '{var_name}' not found in group '{group}'.")
 
         da = ds[var_name]
-        
+
         # Validate that the specified dims match the data array's dimensions
         # excluding chain and draw.
         actual_dims = [d for d in da.dims if d != chain_dim and d != draw_dim]
@@ -142,19 +180,18 @@ def spread_draws(
                 f"Expected {dims}, but found {actual_dims}."
             )
 
-        # Convert the specific DataArray to a LazyFrame
+        # Convert the specific DataArray to a DataFrame
         # .to_dataframe() creates a multi-index DF with all coords.
         df = da.to_dataframe().reset_index()
-        lf = pl.from_pandas(df).lazy()
-        
+        lf = pl.from_pandas(df)
+
         # Rename the value column to var_name
-        # xarray's to_dataframe() names the value column as the variable name 
+        # xarray's to_dataframe() names the value column as the variable name
         # if it's a DataArray, but check just in case.
-        # Use collect_schema().names() to avoid PerformanceWarning from .columns
-        if var_name not in lf.collect_schema().names():
+        if var_name not in lf.columns:
             # If da is scalar, it might have different naming logic
             # Let's ensure the value column is named correctly.
-             lf = lf.rename({lf.collect_schema().names()[-1]: var_name})
+            lf = lf.rename({lf.columns[-1]: var_name})
 
         frames.append(lf)
 
@@ -166,16 +203,16 @@ def add_epred_draws(
     newdata,
     var_name,
     idata_group="predictions",
-    constant_data_group="constant_data",
+    constant_data_group="predictions_constant_data",
     join_on="obs_ind",
-) -> pl.LazyFrame:
+) -> pl.DataFrame:
     """
     Join posterior predictive draws to a covariate DataFrame.
-    
+
     The newdata frame is the *left* table. Draws are attached to it. This avoids
     the denormalisation problem where coefficient values are duplicated for every
     obs_ind — the join goes in the right direction.
-    
+
     Parameters
     ----------
     dt : xr.DataTree
@@ -193,28 +230,29 @@ def add_epred_draws(
         "posterior_predictive", or custom). Default "predictions".
     constant_data_group : str
         InferenceData group name for the covariate grid that aligns with the
-        prediction draws. Default "constant_data" (ArviZ 1.x convention). Set
-        this parameter if your DataTree uses a different naming convention.
+        prediction draws. Default "predictions_constant_data" (ArviZ 1.x
+        convention for the constant data paired with a "predictions" group).
+        Set this parameter if your DataTree uses a different naming convention.
     join_on : str | list[str]
         Column(s) to join newdata to the draws on. Default "obs_ind".
-    
+
     Returns
     -------
-    pl.LazyFrame
-        Tidy LazyFrame with columns: chain, draw, [join_on cols], [covariate cols], var_name
+    pl.DataFrame
+        Tidy DataFrame with columns: chain, draw, [join_on cols], [covariate cols], var_name
         One row per (chain, draw, obs_ind).
-    
+
     Examples
     --------
     # Basic usage — newdata read from dt
     pred_df = add_epred_draws(dt, newdata=None, var_name="mu")
-    # → columns: chain, draw, obs_ind, x, group, mu
-    # → 4 × 1000 × 80 = 320,000 rows
-    
-    # Filter before collecting — only group 0
-    pred_df.filter(pl.col("group") == 0).collect()
-    # → 4 × 1000 × 20 = 80,000 rows materialised
-    
+    # -> columns: chain, draw, obs_ind, x, group, mu
+    # -> 4 x 1000 x 80 = 320,000 rows
+
+    # Filter before plotting — only group 0
+    pred_df.filter(pl.col("group") == 0)
+    # -> 4 x 1000 x 20 = 80,000 rows
+
     # Provide custom newdata (e.g., a finer grid)
     fine_grid = pl.DataFrame({"x": np.linspace(0, 20, 200), "group": ...})
     add_epred_draws(dt, newdata=fine_grid, var_name="mu")
@@ -232,9 +270,9 @@ def add_epred_draws(
     # Get the DataArray for the variable
     da = ds[var_name]
 
-    # Convert to LazyFrame
+    # Convert to DataFrame
     df = da.to_dataframe().reset_index()
-    pred_lazy = pl.from_pandas(df).lazy()
+    pred_df = pl.from_pandas(df)
 
     # Handle newdata parameter
     if newdata is None:
@@ -246,33 +284,34 @@ def add_epred_draws(
             )
 
         # Read the constant data group
-        const_lazy = _datatree_group_to_lazy(dt, constant_data_group)
+        const_df = _datatree_group_to_df(dt, constant_data_group)
 
-        # Join pred_lazy with const_lazy on join_on
-        result = pred_lazy.join(const_lazy, on=join_on, how="left")
+        # Join pred_df with const_df on join_on
+        result = pred_df.join(const_df, on=join_on, how="left")
 
     else:
-        # Convert newdata to LazyFrame if needed
-        if not isinstance(newdata, pl.LazyFrame):
-            # Check if it's a pandas DataFrame or Polars DataFrame
-            try:
-                import pandas as pd
-                if isinstance(newdata, pd.DataFrame):
-                    newdata = pl.from_pandas(newdata).lazy()
-                else:
-                    # Try to convert to polars, might be a Polars DataFrame
-                    newdata = pl.from_pandas(newdata.to_pandas()).lazy()
-            except AttributeError:
-                # If it fails, just try pl.from_pandas directly as a fallback
-                try:
-                    newdata = pl.from_pandas(newdata).lazy()
-                except Exception:
-                    raise TypeError("newdata must be either None, a pl.DataFrame, pd.DataFrame, or pl.LazyFrame.")
-
-        # Join pred_lazy with newdata on join_on
-        result = pred_lazy.join(newdata, on=join_on, how="left")
+        newdata_df = _coerce_to_dataframe(newdata)
+        # Join pred_df with newdata on join_on
+        result = pred_df.join(newdata_df, on=join_on, how="left")
 
     return result
+
+
+def _coerce_to_dataframe(newdata) -> pl.DataFrame:
+    """Coerce newdata (pl.DataFrame, pl.LazyFrame, or pd.DataFrame) to a Polars DataFrame."""
+    if isinstance(newdata, pl.DataFrame):
+        return newdata
+    if isinstance(newdata, pl.LazyFrame):
+        return newdata.collect()
+    try:
+        import pandas as pd
+    except ImportError:
+        pd = None
+    if pd is not None and isinstance(newdata, pd.DataFrame):
+        return pl.from_pandas(newdata)
+    raise TypeError(
+        "newdata must be one of: pl.DataFrame, pl.LazyFrame, pd.DataFrame, or None."
+    )
 
 
 def spread_draws_compare(
@@ -280,12 +319,12 @@ def spread_draws_compare(
     *var_specs: str,
     groups: list[str] = ["posterior", "prior"],
     group_name: str = "source",
-) -> pl.LazyFrame:
+) -> pl.DataFrame:
     """
     Extract and stack draws from multiple groups (e.g., posterior and prior).
 
     Calls spread_draws() for each group, adds a column identifying the source group,
-    and concatenates the results into a single LazyFrame for easy comparison.
+    and concatenates the results into a single DataFrame for easy comparison.
 
     Parameters
     ----------
@@ -300,16 +339,16 @@ def spread_draws_compare(
 
     Returns
     -------
-    pl.LazyFrame
+    pl.DataFrame
         Stacked draws with an additional column (group_name) indicating source.
 
     Example
     -------
     # Extract posterior and prior for side-by-side forest plots
-    compare_df = spread_draws_compare(dt, "beta[groups]", 
+    compare_df = spread_draws_compare(dt, "beta[groups]",
                                        groups=["posterior", "prior"])
-    # → columns: chain, draw, groups, beta, source
-    # → source ∈ {"posterior", "prior"}
+    # -> columns: chain, draw, groups, beta, source
+    # -> source in {"posterior", "prior"}
     """
 
     # Collect results from each group

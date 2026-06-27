@@ -23,7 +23,7 @@ table that conflates two semantically different levels (parameter space vs. data
 space), duplicates coefficient values across every observation point, and hard-codes
 variable names.
 
-`tidydraws` solves this with a clean data layer (Polars LazyFrames) and a thin
+`tidydraws` solves this with a clean data layer (Polars DataFrames) and a thin
 lets-plot integration layer.
 
 ---
@@ -33,9 +33,9 @@ lets-plot integration layer.
 
 | Goal   | Description                                                                                                                                            |
 | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **G1** | Provide `spread_draws()`: extract posterior parameter draws into a tidy Polars LazyFrame, respecting named dimensions, with no unnecessary duplication |
+| **G1** | Provide `spread_draws()`: extract posterior parameter draws into a tidy Polars DataFrame, respecting named dimensions, with no unnecessary duplication |
 | **G2** | Provide `add_epred_draws()`: join prediction draws to a covariate grid, without conflating parameter-space and data-space variables                    |
-| **G3** | Use Polars LazyFrames throughout so users pay the materialisation cost only when needed                                                                |
+| **G3** | Use Polars DataFrames throughout; the data is already materialised during extraction, so eager frames are honest about cost and a single `.to_pandas()` from any plotting backend |
 | **G4** | Provide a thin lets-plot helper layer with `stat_hdi()` and `stat_pointinterval()` that accept Polars frames and return lets-plot layers               |
 | **G5** | Work generically for any `InferenceData` — no hard-coded variable or coordinate names                                                                  |
 | **G6** | Be a data transformation layer, not a new plotting package                                                                                             |
@@ -81,23 +81,28 @@ must not be conflated in a single flat table.
 └─────────────────────────────────────────────────────┘
 ```
 
-Joining these two levels is only done explicitly and lazily when the user's plot
-genuinely requires both in the same layer — which is uncommon.
+Joining these two levels is only done explicitly when the user's plot genuinely
+requires both in the same layer — which is uncommon.
 
-### 4.2 Why Polars LazyFrames?
-
-
-| Problem                                               | Polars Lazy Solution                                                                     |
-| ----------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| 320k-row frame for a density plot that needs 16k rows | User filters before `.collect()`; predicate pushdown avoids loading the rest             |
-| Coefficient duplication across obs_ind                | Duplication happens lazily — only materialised if you call `.collect()` on the full join |
-| Memory blowup for large models (70B-draw equivalents) | Streaming / chunked collection via `collect(streaming=True)`                             |
-| Slow pandas joins                                     | Polars join is typically 5–20× faster                                                    |
+### 4.2 Why Polars (eager `DataFrame`)?
 
 
-The API always returns `pl.LazyFrame`. The user calls `.collect()` when they're ready to
-pass data to lets-plot or inspect it. This means filtering, selecting, or aggregating can
-happen before any data is loaded into memory.
+| Problem                                               | Polars eager solution                                                                 |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| 320k-row frame for a density plot that needs 16k rows | Filter the returned `DataFrame` with `.filter()`; Polars eager filters are fast and in-memory |
+| Coefficient duplication across obs_ind                | Parameter and prediction spaces are kept in separate frames; no fan-out by default    |
+| Slow pandas joins                                     | Polars join is typically 5–20× faster than pandas                                    |
+
+
+The API always returns `pl.DataFrame` (eager). The extraction path is
+`xarray.DataArray.to_dataframe()` (pandas, fully materialised) → `pl.from_pandas()`, so the
+data is already in memory before any Polars object exists; wrapping it in a `LazyFrame`
+would buy nothing — predicate pushdown and streaming only pay off when the *source* is lazy
+(e.g. `scan_parquet`), which it is not here — and would tax every plotting call with a
+`.collect()` step plus the `.to_pandas()` hop that lets-plot/plotnine require anyway. Eager
+frames are honest about the cost and a single `.to_pandas()` away from any ggplot-like
+backend. Users can still `.filter()` / `.select()` / `.group_by()` on the returned frame
+before handing it to a plot.
 
 ### 4.3 Why lets-plot?
 
@@ -113,7 +118,7 @@ happen before any data is loaded into memory.
 
 ### 5.1 `spread_draws()`
 
-Extract posterior draws for named parameters into a tidy Polars LazyFrame.
+Extract posterior draws for named parameters into a tidy Polars DataFrame.
 
 ```python
 def spread_draws(
@@ -122,9 +127,9 @@ def spread_draws(
     group: str = "posterior",
     chain_dim: str = "chain",
     draw_dim: str = "draw",
-) -> pl.LazyFrame:
+) -> pl.DataFrame:
     """
-    Extract posterior draws for one or more variables into a tidy Polars LazyFrame.
+    Extract posterior draws for one or more variables into a tidy Polars DataFrame.
 
     Parameters
     ----------
@@ -143,8 +148,8 @@ def spread_draws(
 
     Returns
     -------
-    pl.LazyFrame
-        Tidy LazyFrame with columns: chain, draw, [named dims...], [var_names...]
+    pl.DataFrame
+        Tidy DataFrame with columns: chain, draw, [named dims...], [var_names...]
         One row per unique (chain, draw, [dim combo]).
 
     Examples
@@ -181,7 +186,7 @@ def spread_draws(
 - Variables with different dims trigger an explicit cross-join, with a logged warning (e.g., scalar `sigma` broadcast across `beta[groups]`)
 - The string syntax `"beta[groups]"` directly mirrors R's `tidybayes::spread_draws(model, beta[group])`
 - Supports any group in the DataTree (posterior, prior, custom); no special casing
-- Always returns `pl.LazyFrame` — call `.collect()` when ready to materialize
+- Always returns `pl.DataFrame` (eager); call `.to_pandas()` when passing to a plotting backend
 
 ---
 
@@ -197,7 +202,7 @@ def add_epred_draws(
     idata_group: str = "predictions",
     constant_data_group: str = "predictions_constant_data",
     join_on: str | list[str] = "obs_ind",
-) -> pl.LazyFrame:
+) -> pl.DataFrame:
     """
     Join posterior predictive draws to a covariate DataFrame.
 
@@ -229,8 +234,8 @@ def add_epred_draws(
 
     Returns
     -------
-    pl.LazyFrame
-        Tidy LazyFrame with columns: chain, draw, [join_on cols], [covariate cols], var_name
+    pl.DataFrame
+        Tidy DataFrame with columns: chain, draw, [join_on cols], [covariate cols], var_name
         One row per (chain, draw, obs_ind).
 
     Examples
@@ -240,9 +245,9 @@ def add_epred_draws(
     # → columns: chain, draw, obs_ind, x, group, mu
     # → 4 × 1000 × 80 = 320,000 rows
 
-    # Filter before collecting — only group 0
-    pred_df.filter(pl.col("group") == 0).collect()
-    # → 4 × 1000 × 20 = 80,000 rows materialised
+    # Filter before plotting — only group 0
+    pred_df.filter(pl.col("group") == 0)
+    # → 4 × 1000 × 20 = 80,000 rows
 
     # Provide custom newdata (e.g., a finer grid)
     fine_grid = pl.DataFrame({"x": np.linspace(0, 20, 200), "group": ...})
@@ -253,7 +258,7 @@ def add_epred_draws(
 **Key behaviour:**
 
 - `newdata` is the left table — draws fan out from it, not the other way around
-- Returns a LazyFrame; no data is loaded until `.collect()` is called
+- Returns a `pl.DataFrame` (eager); filter/select/group_by on it before passing to a plot
 - Deliberately does **not** attach parameter-space variables (`beta`, `intercept`) — those are for `spread_draws()`
 - Works with both `predictions` and `posterior_predictive` groups
 - If `newdata=None` and the `constant_data_group` is not found in the DataTree, raises a clear error with guidance
@@ -271,12 +276,12 @@ def spread_draws_compare(
     *var_specs: str,
     groups: list[str] = ["posterior", "prior"],
     group_name: str = "source",
-) -> pl.LazyFrame:
+) -> pl.DataFrame:
     """
     Extract and stack draws from multiple groups (e.g., posterior and prior).
 
     Calls spread_draws() for each group, adds a column identifying the source group,
-    and concatenates the results into a single LazyFrame for easy comparison.
+    and concatenates the results into a single DataFrame for easy comparison.
 
     Parameters
     ----------
@@ -291,7 +296,7 @@ def spread_draws_compare(
 
     Returns
     -------
-    pl.LazyFrame
+    pl.DataFrame
         Stacked draws with an additional column (group_name) indicating source.
 
     Example
@@ -309,18 +314,18 @@ def spread_draws_compare(
 - Calls `spread_draws()` separately for each group, then stacks with `pl.concat()`
 - Adds a grouping column (`source` by default) identifying which group each row came from
 - Useful for prior vs. posterior comparison plots
-- Returns LazyFrame; no data materialized until `.collect()`
+- Returns a `pl.DataFrame` (eager)
 
 ---
 
 ### 5.4 lets-plot Helper Layer
 
-These are thin helpers, not a new plotting package. They accept a Polars LazyFrame (or
-collected DataFrame) and return lets-plot layer objects.
+These are thin helpers, not a new plotting package. They accept a Polars
+DataFrame and return lets-plot layer objects.
 
 ```python
 def stat_hdi(
-    data: pl.LazyFrame | pl.DataFrame,
+    data: pl.DataFrame,
     x: str,
     y: str,
     prob: float = 0.89,
@@ -336,7 +341,7 @@ def stat_hdi(
 
     Parameters
     ----------
-    data : pl.LazyFrame | pl.DataFrame
+    data : pl.DataFrame
         Tidy draws frame from add_epred_draws() or spread_draws().
     x : str
         Column to use as x aesthetic (aggregation key).
@@ -367,7 +372,7 @@ def stat_hdi(
     Example (plotnine backend)
     --------------------------
     from plotnine import *
-    pred = add_epred_draws(dt, newdata=None, var_name="mu").collect()
+    pred = add_epred_draws(dt, newdata=None, var_name="mu")
 
     (
         ggplot()
@@ -378,7 +383,7 @@ def stat_hdi(
 
 
 def stat_median_line(
-    data: pl.LazyFrame | pl.DataFrame,
+    data: pl.DataFrame,
     x: str,
     y: str,
     group: str | None = None,
@@ -388,7 +393,7 @@ def stat_median_line(
 
 
 def stat_pointinterval(
-    data: pl.LazyFrame | pl.DataFrame,
+    data: pl.DataFrame,
     x: str,
     y: str,
     prob: float = 0.89,
@@ -417,7 +422,7 @@ def stat_pointinterval(
     Example (forest plot, plotnine)
     --------------------------------
     from plotnine import *
-    beta_draws = spread_draws(dt, "beta[groups]").collect()
+    beta_draws = spread_draws(dt, "beta[groups]")
     (
         ggplot(aes(x="groups", y="beta"))
         + stat_pointinterval(beta_draws, prob=0.89)
@@ -477,7 +482,7 @@ This table is pure prediction-space data. No duplication of parameters.
   - `03-prediction-space.qmd` — Posterior predictive fits, ribbons, credible intervals
   - `04-migration-from-arviz.qmd` — How to replace ArviZ's imperative approach with tidydraws
   - `05-backends.qmd` — Side-by-side examples using lets-plot and plotnine
-  - `06-lazy-evaluation.qmd` — When and how to use `.collect()`, filtering strategies
+  - `06-filtering-and-aggregation.qmd` — Filtering, selecting, and summarising the returned frames
 
 - **Examples Gallery** (`docs/examples/`): Reusable notebooks with real-world models
   - `linear-regression.qmd` — Regression with group-level effects
@@ -508,7 +513,7 @@ tidydraws/
 ├── __init__.py                      # Public API exports
 ├── _extract.py                      # spread_draws(), add_epred_draws()
 │   ├── _parse_var_spec()            # "beta[groups]" → ("beta", ["groups"])
-│   ├── _datatree_group_to_lazy()   # xarray DataTree group → pl.LazyFrame
+│   ├── _datatree_group_to_df()    # xarray DataTree group → pl.DataFrame
 │   └── _align_dims()                # Handle cross-dim joins
 ├── _stats.py                        # stat_hdi(), stat_pointinterval(), stat_median_line()
 │   ├── _compute_hdi()               # Wraps az.hdi(), returns Polars frame
@@ -526,7 +531,7 @@ docs/
 │   ├── 03-prediction-space.qmd
 │   ├── 04-migration-from-arviz.qmd
 │   ├── 05-backends.qmd
-│   └── 06-lazy-evaluation.qmd
+│   └── 06-filtering-and-aggregation.qmd
 ├── examples/
 │   ├── linear-regression.qmd
 │   ├── hierarchical-model.qmd
@@ -545,29 +550,29 @@ ArviZ 1.0's `xarray.DataTree` structure must be converted to Polars for the data
 xarray.DataTree
     → dt.children[group].to_dataset()  # Access group as Dataset
     → .to_dataframe()                   # pandas (fast, uses xarray's own flattening)
-    → pl.from_pandas()                  # Polars DataFrame
-    → .lazy()                           # Polars LazyFrame
+    → pl.from_pandas()                  # Polars DataFrame (eager)
 ```
 
-This is done once per group, per call. The resulting LazyFrame is then manipulated
-(select, filter, join) before any `.collect()`. For very large models, an alternative
-path using `xarray → numpy → pl.from_numpy()` column-by-column avoids the intermediate
-pandas allocation entirely.
+This is done once per group, per call. The resulting `pl.DataFrame` is then manipulated
+(select, filter, join) directly — no `.collect()` step is needed because the frame is
+already eager. For very large models, an alternative path using
+`xarray → numpy → pl.from_numpy()` column-by-column avoids the intermediate pandas
+allocation entirely.
 
-### Lazy Join Strategy for `add_epred_draws`
+### Join Strategy for `add_epred_draws`
 
 ```python
-# Pseudocode — both sides lazy until .collect()
-pred_lazy = _datatree_group_to_lazy(dt, "predictions", var_name)
-const_lazy = _datatree_group_to_lazy(dt, "predictions_constant_data")
+# Pseudocode — eager DataFrames throughout
+pred_df = _datatree_group_to_df(dt, "predictions", var_name)
+const_df = _datatree_group_to_df(dt, "predictions_constant_data")
 
 # Join covariate data to predictions (newdata is small — broadcast join)
-result = pred_lazy.join(const_lazy.lazy(), on=join_on, how="left")
+result = pred_df.join(const_df, on=join_on, how="left")
 
-# User can filter BEFORE collecting:
-result.filter(pl.col("group") == 2).collect()
-# Polars predicate pushdown reduces work on both sides of the join
+# User can filter the returned frame before plotting:
+result.filter(pl.col("group") == 2)
 ```
+
 
 ---
 
@@ -584,7 +589,7 @@ from letsplot import *
 
 dt = az.from_netcdf("model.nc")  # Load ArviZ 1.0 DataTree
 beta_draws = td.spread_draws(dt, "beta[groups]", "intercept[groups]")
-# 16,000-row LazyFrame — no duplication
+# 16,000-row DataFrame — no duplication
 
 (
     ggplot()
@@ -597,7 +602,7 @@ beta_draws = td.spread_draws(dt, "beta[groups]", "intercept[groups]")
 # ── Data / prediction space ───────────────────────────────────────────────────
 
 pred_draws = td.add_epred_draws(dt, newdata=None, var_name="mu")
-# 320,000-row LazyFrame — parameters NOT included (right semantic level)
+# 320,000-row DataFrame — parameters NOT included (right semantic level)
 
 obs_df = df  # Original observed data as pandas/polars frame
 
@@ -612,10 +617,10 @@ obs_df = df  # Original observed data as pandas/polars frame
     + labs(title="Posterior predictive fit by group")
 )
 
-# ── Lazy filtering before collection ─────────────────────────────────────────
+# ── Filtering before plotting ──────────────────────────────────────────────────
 
-# Only collect group 0 for a quick check — avoids materialising 320k rows
-group0 = pred_draws.filter(pl.col("group") == 0).collect()
+# Only plot group 0 for a quick check
+group0 = pred_draws.filter(pl.col("group") == 0)
 ```
 
 **With plotnine backend:**
@@ -627,8 +632,8 @@ from plotnine import *
 
 dt = az.from_netcdf("model.nc")  # Load ArviZ 1.0 DataTree
 
-# Collect data once for plotnine
-beta_draws = td.spread_draws(dt, "beta[groups]", "intercept[groups]").collect()
+# Parameter draws (already eager)
+beta_draws = td.spread_draws(dt, "beta[groups]", "intercept[groups]")
 
 # Create forest plot
 (
@@ -639,7 +644,7 @@ beta_draws = td.spread_draws(dt, "beta[groups]", "intercept[groups]").collect()
 )
 
 # Posterior predictive plot
-pred_draws = td.add_epred_draws(dt, newdata=None, var_name="mu").collect()
+pred_draws = td.add_epred_draws(dt, newdata=None, var_name="mu")
 
 (
     ggplot(aes(x="x", y="mu"))
@@ -654,7 +659,7 @@ pred_draws = td.add_epred_draws(dt, newdata=None, var_name="mu").collect()
 
 ## 9. Testing Strategy
 
-Testing focuses on correctness of the data transformation layer, with emphasis on row counts, dimension inference, and lazy evaluation semantics.
+Testing focuses on correctness of the data transformation layer, with emphasis on row counts, dimension inference, and eager DataFrame semantics.
 
 ### Test Levels
 
@@ -662,7 +667,7 @@ Testing focuses on correctness of the data transformation layer, with emphasis o
 | --- | --- | --- | --- |
 | **Unit Tests** | Row count correctness, dimension inference, variable spec parsing | `pytest` + synthetic DataTrees | `spread_draws("beta[groups]")` → 4 × 1000 × 4 rows exactly |
 | **Integration Tests** | End-to-end extraction + validation against source DataTree | `pytest` + real PyMC samples | Load model.nc, extract, verify values match original |
-| **Lazy Semantics Tests** | Confirm LazyFrame behavior, predicate pushdown | `pytest` + Polars introspection | Filter before `.collect()`, verify only needed data loaded |
+| **Eager Semantics Tests** | Confirm `pl.DataFrame` return type, filtering works | `pytest` + Polars introspection | Filter the returned frame, verify row count |
 
 ### Test Coverage (v0.1)
 
@@ -677,9 +682,9 @@ Testing focuses on correctness of the data transformation layer, with emphasis o
 - Extract 2–3 parameters, compare to direct xarray indexing
 - Not exhaustive; sampling approach to catch value corruption bugs
 
-**LazyFrame semantics:**
-- Confirm return type is `pl.LazyFrame`, not eager `pl.DataFrame`
-- Verify `.collect()` required before operations expecting eager data
+**DataFrame semantics:**
+- Confirm return type is `pl.DataFrame` (eager), not `pl.LazyFrame`
+- Verify `.filter()` / `.height` work directly without `.collect()`
 
 **Group parameter:**
 - Test extraction from `"posterior"`, `"prior"` groups
@@ -713,7 +718,7 @@ These are required for `tidydraws` to function. Users installing `tidydraws` wil
 
 | Package  | Role                                                                          | Version | Notes                                               |
 | -------- | ----------------------------------------------------------------------------- | ------- | --------------------------------------------------- |
-| `polars` | DataFrame manipulation and lazy evaluation                                   | ≥ 0.20  | Minimum version with lazy join pushdown            |
+| `polars` | DataFrame manipulation (eager)                                               | ≥ 0.20  | Fast in-memory joins and filters                   |
 | `arviz`  | Source format (`xarray.DataTree`) and interval computation (`az.hdi/eti()`) | ≥ 1.0   | Modular; only arviz-base needed, others transitive |
 | `xarray` | DataTree structure                                                            | (via arviz) | Transitive dependency                              |
 | `numpy`  | Array operations                                                              | (via arviz) | Transitive dependency                              |
@@ -801,12 +806,12 @@ The shift to ArviZ 1.0 impacts tidydraws in these ways:
 ### v0.1 — Data Layer + Core Docs (core value)
 
 **Code:**
-- [ ] `_datatree_group_to_lazy()` — generic DataTree group → Polars LazyFrame
+- [ ] `_datatree_group_to_df()` — generic DataTree group → Polars DataFrame
 - [ ] `_parse_var_spec()` — string spec parser supporting nested dims (e.g., `"beta[groups, time]"`)
 - [ ] `spread_draws()` — extract parameter draws, supporting any group (posterior, prior, etc.)
 - [ ] `spread_draws_compare()` — helper for stacking and comparing multiple groups (e.g., posterior vs. prior)
 - [ ] `add_epred_draws()` — prediction draws joined to covariate grid, with configurable constant data group
-- [ ] Tests: row count validation (primary), numerical spot-checks, lazy semantics, group parameter, error handling
+- [ ] Tests: row count validation (primary), numerical spot-checks, eager DataFrame semantics, group parameter, error handling
 
 **Docs:**
 - [ ] `docs/user_guide/01-quickstart.qmd` — 5-min intro with both posterior and prior extraction
@@ -838,10 +843,10 @@ The shift to ArviZ 1.0 impacts tidydraws in these ways:
 - [ ] Support `posterior_predictive` group in addition to `predictions`
 - [ ] Support `observed_data` passthrough for posterior predictive checks
 - [ ] `add_predicted_draws()` — full predictive draws including observation noise
-- [ ] Streaming collection support for very large models
+- [ ] Chunked/streaming extraction path for very large models (lazy xarray scan → Polars)
 
 **Docs:**
-- [ ] `docs/user_guide/06-lazy-evaluation.qmd` — Filtering strategies, predicate pushdown
+- [ ] `docs/user_guide/06-filtering-and-aggregation.qmd` — Filtering, selecting, and summarising the returned frames
 - [ ] `docs/examples/bayesian-workflow.qmd` — Full pipeline with prior predictive, posterior, posterior predictive
 - [ ] Troubleshooting guide (dimension mismatches, group name errors, etc.)
 
@@ -884,14 +889,14 @@ After merge on (chain, draw, group):
 tidydraws approach:
 ──────────────────────────────
 spread_draws(idata, "beta[groups]")
-  → 16,000-row LazyFrame  ✓  (no duplication; collected on demand)
+  → 16,000-row DataFrame  ✓  (no duplication)
 
 add_epred_draws(idata, var_name="mu")
-  → 320,000-row LazyFrame  ✓  (prediction space only; beta not here)
+  → 320,000-row DataFrame  ✓  (prediction space only; beta not here)
 
 Join only if you genuinely need both:
   spread_draws(...).join(add_epred_draws(...), on=["chain", "draw", "group"])
-  → Explicit, lazy, and the user understands what they're paying for
+  → Explicit, and the user understands what they're paying for
 ```
 
  

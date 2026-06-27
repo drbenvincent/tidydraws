@@ -47,13 +47,13 @@ dt = az.from_dict(
 
 ```{python}
 # Scalar: one row per chain × draw
-sigma_df = td.spread_draws(dt, "sigma").collect()
+sigma_df = td.spread_draws(dt, "sigma")
 sigma_df.head()
 ```
 
 ```{python}
 # Array: one row per chain × draw × coordinate
-beta_df = td.spread_draws(dt, "beta[groups]").collect()
+beta_df = td.spread_draws(dt, "beta[groups]")
 beta_df.head()
 ```
 
@@ -78,7 +78,7 @@ With the tidy frame in hand, a density plot per group is one lets-plot call.
 When you request variables with different dimensions in one call, `tidydraws` joins them. Variables sharing dimensions are inner-joined; a scalar is broadcast across array dimensions (with a logged warning).
 
 ```{python}
-mixed = td.spread_draws(dt, "beta[groups]", "sigma").collect()
+mixed = td.spread_draws(dt, "beta[groups]", "sigma")
 mixed.head()
 ```
 
@@ -117,7 +117,7 @@ prior = az.from_dict(
     dims={"beta": ["groups"], "gamma": ["time", "groups"]},
 )
 
-compare = td.spread_draws_compare(prior, "beta[groups]").collect()
+compare = td.spread_draws_compare(prior, "beta[groups]")
 compare.head()
 ```
 
@@ -150,7 +150,6 @@ summary = (
         pl.col("beta").quantile(0.945).alias("upper"),
     )
     .sort("groups")
-    .collect()
 )
 
 (

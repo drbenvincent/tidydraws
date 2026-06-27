@@ -65,43 +65,41 @@ def synthetic_dt():
 def test_row_count_scalar(synthetic_dt):
     # Scalar only: chain=2, draw=5 -> 10 rows
     lf = spread_draws(synthetic_dt, "sigma", group="posterior")
-    df = lf.collect()
+    df = lf
     assert df.height == 2 * 5
 
 def test_row_count_1d(synthetic_dt):
     # 1-d array: chain=2, draw=5, groups=3 -> 30 rows
     lf = spread_draws(synthetic_dt, "beta[groups]", group="posterior")
-    df = lf.collect()
+    df = lf
     assert df.height == 2 * 5 * 3
 
 def test_row_count_2d(synthetic_dt):
     # 2-d array: chain=2, draw=5, time=2, group=3 -> 60 rows
     lf = spread_draws(synthetic_dt, "gamma[time, group]", group="posterior")
-    df = lf.collect()
+    df = lf
     assert df.height == 2 * 5 * 2 * 3
 
 def test_row_count_cross_dim(synthetic_dt):
     # Cross-dim (scalar + 1-d): beta[groups] is the driver -> 30 rows
     lf = spread_draws(synthetic_dt, "beta[groups]", "sigma", group="posterior")
-    df = lf.collect()
+    df = lf
     assert df.height == 2 * 5 * 3
 
-def test_lazy_semantics(synthetic_dt):
-    # Verify return type is pl.LazyFrame
-    lf = spread_draws(synthetic_dt, "sigma", group="posterior")
-    assert isinstance(lf, pl.LazyFrame)
+def test_eager_semantics(synthetic_dt):
+    # Verify return type is pl.DataFrame (eager)
+    df = spread_draws(synthetic_dt, "sigma", group="posterior")
+    assert isinstance(df, pl.DataFrame)
 
-    # Verify .collect() is needed for eager operations (like height/shape)
-    with pytest.raises(AttributeError):
-        # LazyFrames don't have 'height' or 'shape' like DataFrames do
-        _ = lf.height 
+    # Eager frames expose .height directly
+    assert df.height == 2 * 5
 
-def test_lazy_filtering(synthetic_dt):
-    # Test filtering before .collect()
-    lf = spread_draws(synthetic_dt, "beta[groups]", group="posterior")
+def test_filtering(synthetic_dt):
+    # Test filtering on an eager DataFrame
+    df = spread_draws(synthetic_dt, "beta[groups]", group="posterior")
     # Filter for groups == 0 (should be 2 * 5 * 1 = 10 rows)
-    df = lf.filter(pl.col("groups") == 0).collect()
-    assert df.height == 10
+    filtered = df.filter(pl.col("groups") == 0)
+    assert filtered.height == 10
 
 def test_error_invalid_group(synthetic_dt):
     with pytest.raises(KeyError, match="Group 'nonexistent' not found"):
@@ -128,7 +126,7 @@ def test_error_dimension_mismatch(synthetic_dt):
 def test_numerical_correctness(synthetic_dt):
     # Spot-check one value from beta
     lf = spread_draws(synthetic_dt, "beta[groups]", group="posterior")
-    df = lf.collect()
+    df = lf
     
     # Find row for chain=0, draw=0, groups=0
     val = df.filter((pl.col("chain") == 0) & (pl.col("draw") == 0) & (pl.col("groups") == 0)).get_column("beta")[0]
@@ -140,7 +138,7 @@ def test_numerical_correctness(synthetic_dt):
 def test_numerical_correctness_2d(synthetic_dt):
     # Spot-check one value from gamma (chain, draw, time, group)
     lf = spread_draws(synthetic_dt, "gamma[time, group]", group="posterior")
-    df = lf.collect()
+    df = lf
     
     # Find row for chain=0, draw=0, time=1, group=2
     val = df.filter(

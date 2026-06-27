@@ -28,7 +28,7 @@ dt = az.from_dict(
 
 # ── Parameter space: tidy posterior draws ────────────────────────
 beta_draws = td.spread_draws(dt, "beta[groups]")
-# → LazyFrame with columns: chain, draw, groups, beta
+# → DataFrame with columns: chain, draw, groups, beta
 
 # ── Summarise and plot with lets-plot ───────────────────────────
 summary = (
@@ -39,7 +39,6 @@ summary = (
         pl.col("beta").quantile(0.945).alias("upper"),
     )
     .sort("groups")
-    .collect()
 )
 
 (
@@ -55,21 +54,21 @@ summary = (
 
 Plotting MCMC output in Python requires manual wrangling of `arviz.InferenceData` objects — slicing xarray dimensions, iterating over groups, managing coordinate alignment. This is imperative, boilerplate-heavy, and error-prone.
 
-R's [`tidybayes`](https://github.com/TuringLang/tidybayes) solved this elegantly with a data transformation layer that respects the semantics of parameter space vs. prediction space. `tidydraws` brings the same philosophy to Python — using **Polars LazyFrames** so you only pay the materialisation cost when you're ready.
+R's [`tidybayes`](https://github.com/TuringLang/tidybayes) solved this elegantly with a data transformation layer that respects the semantics of parameter space vs. prediction space. `tidydraws` brings the same philosophy to Python — using **Polars DataFrames** so the tidy frame is one `.to_pandas()` away from any plotting backend.
 
 | Problem | tidydraws Solution |
 | --- | --- |
 | Manually flatten xarray Datasets | `spread_draws()` returns a clean, per-dimension frame |
 | Denormalised tables duplicating coefficients across observations | Parameter space (`beta`) and prediction space (`mu`) kept separate |
-| Eager evaluation loads everything into memory | LazyFrames let you filter before `.collect()` — only load what you need |
+| Eager DataFrames make the cost honest | The data is materialised during extraction; filter the returned frame with `.filter()` before plotting |
 
 ## Core Functions
 
-- **`spread_draws(dt, "var[dim1, dim2]", ...)`** — Extract posterior draws into a tidy Polars LazyFrame
+- **`spread_draws(dt, "var[dim1, dim2]", ...)`** — Extract posterior draws into a tidy Polars DataFrame
 - **`add_epred_draws(dt, newdata=..., var_name="mu")`** — Join prediction draws to a covariate grid
 - **`spread_draws_compare(dt, "var[groups]", groups=["posterior", "prior"])`** — Stack draws from multiple groups (e.g., prior vs. posterior)
 
-All functions always return `pl.LazyFrame`. Call `.collect()` when you're ready to plot or inspect.
+All functions always return `pl.DataFrame` (eager). Call `.to_pandas()` when handing the frame to a plotting backend.
 
 ## Getting Started
 

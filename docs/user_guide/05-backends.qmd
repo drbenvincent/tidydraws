@@ -15,7 +15,7 @@ status: new
 | Feel | ggplot2-like, fast | ggplot2-like, familiar to matplotlib users |
 | Output | Interactive HTML | Static PNG |
 
-Both accept a pandas DataFrame. Since `tidydraws` returns Polars frames, the only bridge is `.to_pandas()` (or `.collect().to_pandas()` for a `LazyFrame`).
+Both accept a pandas DataFrame. Since `tidydraws` returns Polars DataFrames, the only bridge is `.to_pandas()`.
 
 ## Setup
 
@@ -50,7 +50,7 @@ dt = az.from_dict(
 This single call produces the data both backends will plot.
 
 ```{python}
-beta_df = td.spread_draws(dt, "beta[groups]").collect()
+beta_df = td.spread_draws(dt, "beta[groups]")
 beta_df.head()
 ```
 
@@ -138,7 +138,7 @@ pred_dt = az.from_dict(
 )
 
 pred = td.add_epred_draws(pred_dt, newdata=None, var_name="mu",
-                          constant_data_group="constant_data").collect()
+                          constant_data_group="constant_data")
 
 pred_summary = (
     pred.group_by("obs_ind", "x", "group")
@@ -180,6 +180,6 @@ Same `pred_summary` frame, plotnine rendering.
 ## Summary
 
 - `tidydraws` is plotting-backend-agnostic because it only produces tidy data.
-- The only bridge is `.collect().to_pandas()` (or `.to_pandas()` on an eager frame).
+- The only bridge is `.to_pandas()` on the returned `DataFrame`.
 - lets-plot and plotnine share near-identical `ggplot()` APIs, so the same plot is a drop-in swap.
 - Choose based on output format (interactive HTML vs. static PNG) and ecosystem familiarity.

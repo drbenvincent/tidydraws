@@ -8,8 +8,7 @@ description: A 5-minute guide to getting started with tidydraws
 The workflow is always three steps:
 
 1. **Extract** tidy draws with `spread_draws()` / `add_epred_draws()`.
-2. **Collect** with `.collect()` when you're ready to plot.
-3. **Plot** with your chosen backend using standard geoms.
+2. **Plot** with your chosen backend using standard geoms.
 
 ## Setup
 
@@ -51,12 +50,11 @@ dt = az.from_dict(
 
 ## Extract Tidy Draws
 
-`spread_draws()` returns a `pl.LazyFrame` with one row per chain × draw × coordinate combination. Each variable becomes a column.
+`spread_draws()` returns a `pl.DataFrame` with one row per chain × draw × coordinate combination. Each variable becomes a column.
 
 ```{python}
 beta_draws = td.spread_draws(dt, "beta[groups]", "intercept[groups]")
-beta_df = beta_draws.collect()
-beta_df.head()
+beta_draws.head()
 ```
 
 The frame is tidy: `chain`, `draw`, `groups`, `beta`, `intercept`. That's all a plotting library needs.
@@ -77,7 +75,6 @@ summary = (
         pl.col("beta").quantile(0.945).alias("upper"),
     )
     .sort("groups")
-    .collect()
 )
 
 (
@@ -108,7 +105,7 @@ prior = az.from_dict(
     dims={"beta": ["groups"], "intercept": ["groups"]},
 )
 
-compare = td.spread_draws_compare(prior, "beta[groups]").collect()
+compare = td.spread_draws_compare(prior, "beta[groups]")
 compare.head()
 ```
 
@@ -127,8 +124,8 @@ compare.head()
 
 ## Summary
 
-1. **`spread_draws()`** extracts parameters into a tidy `LazyFrame` — one row per chain × draw × coordinate.
+1. **`spread_draws()`** extracts parameters into a tidy `DataFrame` — one row per chain × draw × coordinate.
 2. **`spread_draws_compare()`** stacks groups (prior/posterior) with a `source` column for comparison plots.
-3. **`.collect()`** materialises the frame; from there any plotting library can take over.
+3. **`.to_pandas()`** bridges to any plotting library that expects pandas.
 
 `tidydraws` stops at the tidy frame. Everything you see above — `geom_pointrange`, `geom_density`, `facet_wrap` — is plain lets-plot. See [Parameter Space](02-parameter-space.qmd) and [Prediction Space](03-prediction-space.qmd) for deeper coverage, and [Plotting Backends](05-backends.qmd) for the same plots rendered with plotnine.

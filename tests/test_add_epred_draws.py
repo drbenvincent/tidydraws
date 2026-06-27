@@ -56,17 +56,17 @@ def test_join_correctness(synthetic_dt_with_predictions):
     result = add_epred_draws(dt, newdata=None, var_name="mu")
     
     # Row count: chain × draw × obs_ind = 2 × 5 × 20 = 200 rows
-    assert result.collect().height == 2 * 5 * 20 == 200
+    assert result.height == 2 * 5 * 20 == 200
     
     # Check that the newdata columns (x, group) are preserved
-    collected_df = result.collect()
+    collected_df = result
     assert "x" in collected_df.columns
     assert "group" in collected_df.columns
     assert "obs_ind" in collected_df.columns
     
     # Spot-check a few values to ensure correctness 
     # (values should be from the mu array we created)
-    first_rows = result.limit(5).collect()
+    first_rows = result.limit(5)
     assert len(first_rows) == 5
     assert "mu" in first_rows.columns
 
@@ -76,11 +76,11 @@ def test_constant_data_group_handling(synthetic_dt_with_predictions):
     
     # Test default group name auto-read
     result1 = add_epred_draws(dt, newdata=None, var_name="mu")
-    assert result1.collect().height == 200
+    assert result1.height == 200
     
     # Test explicit group parameter
     result2 = add_epred_draws(dt, newdata=None, var_name="mu", constant_data_group="predictions_constant_data")
-    assert result2.collect().height == 200
+    assert result2.height == 200
     
     # Test error on missing group
     dt_no_const = xr.DataTree()
@@ -99,14 +99,14 @@ def test_newdata_parameter(synthetic_dt_with_predictions):
         "group": np.random.choice([0, 1, 2], 20)
     })
     result_pd = add_epred_draws(dt, newdata=newdata_pd, var_name="mu")
-    assert result_pd.collect().height == 200
+    assert result_pd.height == 200
     
     # Test with newdata=None when group is present (should work)
     result_none = add_epred_draws(dt, newdata=None, var_name="mu")
-    assert result_none.collect().height == 200
+    assert result_none.height == 200
     
     # Test that we get expected columns back
-    collected = result_none.collect()
+    collected = result_none
     assert "x" in collected.columns
     assert "group" in collected.columns
     assert "obs_ind" in collected.columns
@@ -125,22 +125,19 @@ def test_newdata_missing_group_error(synthetic_dt_with_predictions):
     with pytest.raises(KeyError, match="constant_data_group.*not found"):
         add_epred_draws(dt_no_const, newdata=None, var_name="mu")
 
-def test_lazy_semantics(synthetic_dt_with_predictions):
-    """Test that return type is LazyFrame and filtering works."""
+def test_eager_semantics(synthetic_dt_with_predictions):
+    """Test that return type is DataFrame (eager) and filtering works."""
     dt = synthetic_dt_with_predictions
-    
+
     result = add_epred_draws(dt, newdata=None, var_name="mu")
-    
-    # Test return type is LazyFrame
-    assert isinstance(result, pl.LazyFrame)
-    
-    # Test filtering before .collect() works
+
+    # Test return type is pl.DataFrame (eager)
+    assert isinstance(result, pl.DataFrame)
+
+    # Test filtering works on the eager frame
     filtered_result = result.filter(pl.col("obs_ind") == 0)
-    assert isinstance(filtered_result, pl.LazyFrame)  # Should still be Lazy
-    
-    # But collecting should work
-    collected = filtered_result.collect()
-    assert collected.height >= 0  # At least some rows
+    assert isinstance(filtered_result, pl.DataFrame)
+    assert filtered_result.height >= 0  # At least some rows
 
 def test_no_parameter_duplication(synthetic_dt_with_predictions):
     """Test that there's no parameter duplication in the result."""
@@ -148,7 +145,7 @@ def test_no_parameter_duplication(synthetic_dt_with_predictions):
     
     result = add_epred_draws(dt, newdata=None, var_name="mu")
     
-    df = result.collect()
+    df = result
     
     # Check for duplicate column names
     columns = df.columns

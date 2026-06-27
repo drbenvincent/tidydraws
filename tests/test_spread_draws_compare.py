@@ -70,7 +70,7 @@ def synthetic_dt():
 def test_spread_draws_compare_basic(synthetic_dt):
     # Test basic functionality with default groups
     lf = spread_draws_compare(synthetic_dt, "beta[groups]")
-    df = lf.collect()
+    df = lf
     
     # Should have 2 * 5 * 3 * 2 (chains * draws * groups * groups) rows 
     # since we're comparing posterior and prior
@@ -90,7 +90,7 @@ def test_spread_draws_compare_basic(synthetic_dt):
 def test_spread_draws_compare_custom_groups(synthetic_dt):
     # Test with custom groups including a custom group
     lf = spread_draws_compare(synthetic_dt, "beta[groups]", groups=["posterior", "prior", "prior_pred"])
-    df = lf.collect()
+    df = lf
     
     # Should have 2 * 5 * 3 * 3 (chains * draws * groups * groups) rows 
     assert df.height == 2 * 5 * 3 * 3
@@ -103,7 +103,7 @@ def test_spread_draws_compare_custom_groups(synthetic_dt):
 def test_spread_draws_compare_multiple_vars(synthetic_dt):
     # Test with multiple variables
     lf = spread_draws_compare(synthetic_dt, "beta[groups]", "sigma")
-    df = lf.collect()
+    df = lf
     
     # Should have 2 * 5 * 3 * 2 (chains * draws * groups * groups) rows 
     assert df.height == 2 * 5 * 3 * 2
@@ -120,22 +120,20 @@ def test_spread_draws_compare_multiple_vars(synthetic_dt):
 def test_spread_draws_compare_custom_group_name(synthetic_dt):
     # Test with custom group column name
     lf = spread_draws_compare(synthetic_dt, "beta[groups]", group_name="model_type")
-    df = lf.collect()
+    df = lf
     
     # Check that we have the custom group column
     assert "model_type" in df.columns
     assert "source" not in df.columns
 
 
-def test_spread_draws_compare_lazy_semantics(synthetic_dt):
-    # Verify return type is pl.LazyFrame
-    lf = spread_draws_compare(synthetic_dt, "beta[groups]")
-    assert isinstance(lf, pl.LazyFrame)
+def test_spread_draws_compare_eager_semantics(synthetic_dt):
+    # Verify return type is pl.DataFrame (eager)
+    df = spread_draws_compare(synthetic_dt, "beta[groups]")
+    assert isinstance(df, pl.DataFrame)
 
-    # Verify .collect() is needed for eager operations (like height/shape)
-    with pytest.raises(AttributeError):
-        # LazyFrames don't have 'height' or 'shape' like DataFrames do
-        _ = lf.height 
+    # Eager frames expose .height directly
+    assert df.height > 0
 
 
 def test_spread_draws_compare_error_invalid_group(synthetic_dt):
@@ -153,7 +151,7 @@ def test_spread_draws_compare_error_malformed_spec(synthetic_dt):
 def test_spread_draws_compare_numerical_correctness(synthetic_dt):
     # Spot-check data integrity
     lf = spread_draws_compare(synthetic_dt, "beta[groups]")
-    df = lf.collect()
+    df = lf
     
     # Check some values from posterior group
     posterior_rows = df.filter(pl.col("source") == "posterior")

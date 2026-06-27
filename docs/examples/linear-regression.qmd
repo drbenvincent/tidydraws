@@ -79,7 +79,7 @@ dt = az.from_dict(
 Extract `beta` and `intercept` draws, summarise per group, and plot a forest of 89% credible intervals.
 
 ```{python}
-params = td.spread_draws(dt, "beta[groups]", "intercept[groups]").collect()
+params = td.spread_draws(dt, "beta[groups]", "intercept[groups]")
 params.head()
 ```
 
@@ -155,7 +155,7 @@ dt_with_prior = az.from_dict(
     pred_dims={"mu": ["obs_ind"]},
 )
 
-compare = td.spread_draws_compare(dt_with_prior, "beta[groups]").collect()
+compare = td.spread_draws_compare(dt_with_prior, "beta[groups]")
 ```
 
 ```{python}
@@ -177,7 +177,7 @@ Join `mu` draws to the covariates with `add_epred_draws()`, summarise, and plot 
 
 ```{python}
 pred = td.add_epred_draws(dt_with_prior, newdata=None, var_name="mu",
-                          constant_data_group="constant_data").collect()
+                          constant_data_group="constant_data")
 pred.head()
 ```
 

@@ -52,10 +52,10 @@ That works, but every new variable or dimension means another reshape, and joini
 
 ## The tidydraws Way: One Declarative Call
 
-`spread_draws()` parses the string spec, infers coordinates, and returns a tidy `LazyFrame` in one line.
+`spread_draws()` parses the string spec, infers coordinates, and returns a tidy `DataFrame` in one line.
 
 ```{python}
-tidy = td.spread_draws(dt, "beta[groups]").collect()
+tidy = td.spread_draws(dt, "beta[groups]")
 tidy.head()
 ```
 
@@ -90,7 +90,7 @@ prior = az.from_dict(
     dims={"beta": ["groups"]},
 )
 
-compare = td.spread_draws_compare(prior, "beta[groups]").collect()
+compare = td.spread_draws_compare(prior, "beta[groups]")
 compare.head()
 ```
 
@@ -142,7 +142,7 @@ pred_dt = az.from_dict(
 )
 
 pred = td.add_epred_draws(pred_dt, newdata=None, var_name="mu",
-                          constant_data_group="constant_data").collect()
+                          constant_data_group="constant_data")
 pred.head()
 ```
 
@@ -179,11 +179,11 @@ summary = (
 | Extract `beta[groups]` | `dt.posterior["beta"].values` + reshape | `spread_draws(dt, "beta[groups]")` |
 | Compare prior/posterior | concat two arrays by hand | `spread_draws_compare(dt, "beta[groups]")` |
 | Join predictions to covariates | manual merge on obs index | `add_epred_draws(dt, var_name="mu")` |
-| Filter before plotting | slice after materialising | `.filter(...).collect()` on the LazyFrame |
+| Filter before plotting | slice after materialising | `.filter(...)` on the returned `DataFrame` |
 
 ## Summary
 
 - Replace manual xarray slicing with declarative string specs.
 - Parameter and prediction spaces stay separate — no denormalised tables.
-- Lazy frames let you filter before `.collect()`.
+- The eager `DataFrame` supports `.filter()` directly before plotting.
 - The tidy output plugs straight into lets-plot (or any backend — see [Plotting Backends](05-backends.qmd)).
