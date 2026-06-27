@@ -64,6 +64,7 @@ dev = [
 Homepage = "https://github.com/drbenvincent/tidydraws"
 Repository = "https://github.com/drbenvincent/tidydraws"
 Issues = "https://github.com/drbenvincent/tidydraws/issues"
+Documentation = "https://drbenvincent.github.io/tidydraws/"
 
 [build-system]
 requires = ["hatchling"]
