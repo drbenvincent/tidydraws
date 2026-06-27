@@ -10,7 +10,7 @@
 | [`prediction_draws()`](https://drbenvincent.github.io/tidy-draws/docs/examples/prediction_draws.html) | prediction | ribbon + line, fit + data |
 | [`compare_draws()`](https://drbenvincent.github.io/tidy-draws/docs/examples/compare_draws.html) | comparison | prior vs posterior, intervals |
 
-![tidydraws example](index-plot.png)
+![tidydraws example](docs/assets/index-plot.png)
 
 ## Install
 

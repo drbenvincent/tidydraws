@@ -3,69 +3,57 @@
 Welcome to the tidydraws project! We're excited that you're interested in contributing.
 This document explains how to set up your development environment and contribute to this project.
 
-## Development Environment Setup
-
-tidydraws uses `uv` for managing dependencies. Make sure you have it installed before proceeding.
+## One-Time Setup
 
 ### Prerequisites
-- Python 3.12 or higher (as specified in `pyproject.toml`)
+- Python 3.12 or higher
 - [`uv`](https://github.com/astral-sh/uv) package manager
-- [`great-docs`](https://posit-dev.github.io/great-docs/) for documentation building
 
-### Getting Started
+### Fork and clone
 
-1. Fork and clone the repository:
-   ```bash
-   git clone https://github.com/YOUR_USERNAME/tidydraws.git
-   cd tidydraws
-   ```
+```bash
+git clone https://github.com/YOUR_USERNAME/tidydraws.git
+cd tidydraws
+```
 
-2. Install dependencies using `uv`:
-   ```bash
-   uv sync
-   ```
+### Install dependencies
 
-3. Install pre-commit hooks for code quality checks (optional but recommended):
-   ```bash
-   uv run pre-commit install
-   ```
+```bash
+uv sync --all-extras
+```
 
-## Development Workflow
+This installs all runtime and dev dependencies (pytest, ruff, mypy, great-docs, etc.) and optional plotting libraries.
 
-1. Install dependencies using `uv`:
-   ```bash
-   uv sync
-   ```
+### Install pre-commit hooks (optional but recommended)
 
-2. Install pre-commit hooks for code quality checks (optional but recommended):
-   ```bash
-   uv run pre-commit install
-   ```
+```bash
+uv run pre-commit install
+```
 
-3. Run tests with:
-   ```bash
-   uv run pytest
-   ```
+## Starting a New Session
 
-4. Lint code with ruff:
-   ```bash
-   uv run ruff check .
-   ```
+Each time you start a new development session, sync your environment to pick up any dependency changes:
 
-5. Type check with mypy:
-   ```bash
-   uv run mypy .
-   ```
+```bash
+uv sync --all-extras
+```
 
-## Testing
-Run tests with:
+Pre-commit hooks persist across sessions — no need to reinstall unless `.pre-commit-config.yaml` changes.
+
+## Common Dev Commands
+
+Run tests:
 ```bash
 uv run pytest
 ```
 
-## Code Linting and Type Checking
+Lint code:
 ```bash
 uv run ruff check .
+```
+
+Type check:
+```bash
 uv run mypy .
 ```
 

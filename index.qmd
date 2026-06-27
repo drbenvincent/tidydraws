@@ -13,8 +13,8 @@ A tidybayes-inspired data layer for declarative Bayesian visualisation in Python
 | [`compare_draws()`](docs/examples/compare_draws.qmd) | comparison | prior vs posterior, intervals |
 
 ```{python}
-#| code-fold: true
-#| cache: true
+# | code-fold: true
+# | cache: true
 from pathlib import Path
 import sys
 
@@ -100,10 +100,13 @@ with pm.Model(coords=coords) as model:
     )
 
 dt.update(prior)
+```
 
+```{python}
 beta_df = td.parameter_draws(dt, "beta[groups]")
 beta_summary = (
-    beta_df.group_by("groups")
+    beta_df
+    .group_by("groups")
     .agg(
         pl.col("beta").quantile(0.055).alias("lower"),
         pl.col("beta").median().alias("median"),
@@ -114,7 +117,8 @@ beta_summary = (
 compare = td.compare_draws(dt, "beta[groups]")
 pred = td.prediction_draws(dt, newdata=observed, var_name="mu")
 pred_summary = (
-    pred.group_by("obs_ind", "x", "group")
+    pred
+    .group_by("obs_ind", "x", "group")
     .agg(
         pl.col("mu").quantile(0.055).alias("lower"),
         pl.col("mu").median().alias("median"),
@@ -122,9 +126,7 @@ pred_summary = (
     )
     .sort("x")
 )
-```
 
-```{python}
 p_forest = (
     ggplot(beta_summary.to_pandas(), aes("groups", "median"))
     + geom_pointrange(aes(ymin="lower", ymax="upper"), size=0.8)
@@ -147,14 +149,16 @@ p_compare = (
 )
 p_pred = (
     ggplot(pred_summary.to_pandas(), aes("x"))
-    + geom_ribbon(aes(ymin="lower", ymax="upper", fill=as_discrete("group")), alpha=0.25)
+    + geom_ribbon(
+        aes(ymin="lower", ymax="upper", fill=as_discrete("group")), alpha=0.25
+    )
     + geom_line(aes(y="median", color=as_discrete("group")), size=0.8)
     + labs(x="x", y="mu", color="group", fill="group", title="Predictive fit")
     + theme_minimal()
 )
 
 g = gggrid([p_forest, p_density, p_compare, p_pred], ncol=2)
-ggsave(g, "index-plot.png", path="..", scale=1.5)
+ggsave(g, "index-plot.png", path="../docs/assets", scale=1.5)
 g
 ```
 
