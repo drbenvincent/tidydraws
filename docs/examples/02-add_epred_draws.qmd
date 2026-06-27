@@ -1,0 +1,159 @@
+---
+title: "Prediction space"
+description: "Join prediction draws to covariates with add_epred_draws()"
+status: stable
+---
+
+`add_epred_draws()` joins posterior-predictive draws (e.g. `mu`) to a covariate grid, producing one tidy row per `chain × draw × observation`. Parameters are deliberately **excluded** — prediction space stays separate from parameter space, so coefficients never get duplicated across observations.
+
+With `newdata=None` it reads covariates straight from a constant-data group in the `DataTree`; pass a `DataFrame` to use a custom grid. It fails loudly if that group is missing. The result is an eager `DataFrame`, so call `.filter()` to subset before plotting.
+
+## Setup
+
+A hierarchical regression with 4 groups of 20 observations. The `DataTree` carries a `posterior` group, a `predictions` group (`mu`), and a `constant_data` group with the covariates `x`, `group`, and the observed `y`.
+
+```{python}
+#| code-fold: true
+import numpy as np
+import polars as pl
+import arviz as az
+import tidydraws as td
+from xarray import DataArray
+from lets_plot import *
+LetsPlot.setup_html()
+
+np.random.seed(42)
+chains, draws, n_groups = 4, 500, 4
+n_per, total = 20, 80
+group = np.repeat(np.arange(n_groups), n_per)
+x = np.random.normal(10, 5, total)
+
+true_int = np.random.normal(0, 0.5, n_groups)
+true_slope = np.random.normal(1.0, 0.2, n_groups)
+y = np.array([true_int[g] + true_slope[g] * xi + np.random.normal(0, 0.8)
+              for g, xi in zip(group, x)])
+
+intercept = np.random.normal(0, 0.5, (chains, draws, n_groups))
+beta = np.random.normal(1.0, 0.2, (chains, draws, n_groups))
+mu = np.zeros((chains, draws, total))
+for i in range(total):
+    g = group[i]
+    mu[:, :, i] = intercept[:, :, g] + beta[:, :, g] * x[i]
+
+dt = az.from_dict(
+    {
+        "posterior": {
+            "intercept": DataArray(intercept, dims=["chain", "draw", "groups"]),
+            "beta": DataArray(beta, dims=["chain", "draw", "groups"]),
+        },
+        "predictions": {"mu": DataArray(mu, dims=["chain", "draw", "obs_ind"])},
+        "constant_data": {
+            "x": DataArray(x, dims=["obs_ind"]),
+            "group": DataArray(group, dims=["obs_ind"]),
+            "y": DataArray(y, dims=["obs_ind"]),
+        },
+    },
+    coords={
+        "groups": [f"g{i}" for i in range(n_groups)],
+        "obs_ind": list(range(total)),
+    },
+    dims={"intercept": ["groups"], "beta": ["groups"],
+          "x": ["obs_ind"], "group": ["obs_ind"], "y": ["obs_ind"]},
+    pred_dims={"mu": ["obs_ind"]},
+)
+```
+
+One call joins `mu` to `x`, `group`, and `y`:
+
+```{python}
+pred = td.add_epred_draws(
+    dt, newdata=None, var_name="mu", constant_data_group="constant_data"
+)
+pred.head()
+```
+
+Note the columns: `chain`, `draw`, `obs_ind`, `x`, `group`, `y`, `mu`. No `beta`, no `intercept` — parameters stay in their own frame.
+
+## Gallery
+
+### Posterior predictive fit by group
+
+Summarise `mu` per observation with quantiles, then a ribbon + median line.
+
+```{python}
+#| fig-cap: "Posterior predictive fit by group (89% credible ribbon)."
+summary = (
+    pred.group_by("obs_ind", "x", "group", "y")
+    .agg(
+        pl.col("mu").quantile(0.055).alias("lower"),
+        pl.col("mu").median().alias("median"),
+        pl.col("mu").quantile(0.945).alias("upper"),
+    )
+    .sort("x")
+)
+
+(
+    ggplot(summary.to_pandas(), aes("x"))
+    + geom_ribbon(aes(ymin="lower", ymax="upper", fill=as_discrete("group")), alpha=0.25)
+    + geom_line(aes(y="median", color=as_discrete("group")), size=0.8)
+    + labs(x="x", y="mu", color="group", fill="group",
+           title="Posterior predictive fit by group")
+    + theme_minimal()
+)
+```
+
+### Fit with observed data overlaid
+
+The observed `y` lives in the same tidy frame — overlay it as points.
+
+```{python}
+#| fig-cap: "Posterior predictive fit with 89% credible ribbon and observed data."
+observed = summary.select("x", "y", "group").unique()
+
+(
+    ggplot(summary.to_pandas(), aes("x"))
+    + geom_ribbon(aes(ymin="lower", ymax="upper", fill=as_discrete("group")), alpha=0.2)
+    + geom_line(aes(y="median", color=as_discrete("group")), size=0.8)
+    + geom_point(
+        data=observed.to_pandas(),
+        mapping=aes("y", color=as_discrete("group")),
+        size=1.2, alpha=0.6,
+    )
+    + labs(x="x", y="mu / y", color="group", fill="group",
+           title="Posterior predictive fit with observed data")
+    + theme_minimal()
+)
+```
+
+### Filter before plotting
+
+Because the result is an eager `DataFrame`, subset with `.filter()` before summarising — useful when the full prediction space is large.
+
+```{python}
+#| fig-cap: "Posterior predictive fit for group 0, with observed data."
+g0 = td.add_epred_draws(
+    dt, newdata=None, var_name="mu", constant_data_group="constant_data"
+).filter(pl.col("group") == 0)
+
+s0 = (
+    g0.group_by("obs_ind", "x", "y")
+    .agg(
+        pl.col("mu").quantile(0.055).alias("lower"),
+        pl.col("mu").median().alias("median"),
+        pl.col("mu").quantile(0.945).alias("upper"),
+    )
+    .sort("x")
+)
+
+(
+    ggplot(s0.to_pandas(), aes("x"))
+    + geom_ribbon(aes(ymin="lower", ymax="upper"), fill="steelblue", alpha=0.3)
+    + geom_line(aes(y="median"), color="navy", size=0.9)
+    + geom_point(aes("y"), color="black", size=1.0, alpha=0.5)
+    + labs(x="x", y="mu / y", title="Group 0 fit with observed data")
+    + theme_minimal()
+)
+```
+
+See [`spread_draws()`](spread_draws.qmd) for parameter space, or
+[`spread_draws_compare()`](spread_draws_compare.qmd) for prior vs posterior.

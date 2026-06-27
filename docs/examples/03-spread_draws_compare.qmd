@@ -1,0 +1,113 @@
+---
+title: "Comparing groups"
+description: "Stack prior and posterior draws with spread_draws_compare()"
+status: stable
+---
+
+`spread_draws_compare()` calls `spread_draws()` once per group (default `["posterior", "prior"]`), tags each with a `source` column, and stacks them into a single `DataFrame`. The result is the tidy input for any comparison plot — no manual concatenation.
+
+## Setup
+
+A `DataTree` with both a `posterior` and a `prior` group for `beta[groups]` and the scalar `sigma`.
+
+```{python}
+#| code-fold: true
+import numpy as np
+import polars as pl
+import arviz as az
+import tidydraws as td
+from xarray import DataArray
+from lets_plot import *
+LetsPlot.setup_html()
+
+np.random.seed(11)
+chains, draws, n_groups = 4, 500, 4
+beta_post = np.random.normal(1.0, 0.2, (chains, draws, n_groups))
+beta_prior = np.random.normal(0.0, 0.5, (chains, draws, n_groups))
+sigma_post = np.random.normal(0.8, 0.1, (chains, draws))
+sigma_prior = np.random.normal(1.0, 0.2, (chains, draws))
+
+dt = az.from_dict(
+    {
+        "posterior": {
+            "beta": DataArray(beta_post, dims=["chain", "draw", "groups"]),
+            "sigma": DataArray(sigma_post, dims=["chain", "draw"]),
+        },
+        "prior": {
+            "beta": DataArray(beta_prior, dims=["chain", "draw", "groups"]),
+            "sigma": DataArray(sigma_prior, dims=["chain", "draw"]),
+        },
+    },
+    coords={"groups": [f"g{i}" for i in range(n_groups)]},
+    dims={"beta": ["groups"]},
+)
+```
+
+One call stacks both sources:
+
+```{python}
+compare = td.spread_draws_compare(dt, "beta[groups]")
+compare.head()
+```
+
+## Gallery
+
+### Prior vs posterior (pooled)
+
+```{python}
+#| fig-cap: "Prior vs posterior density of `beta`, pooled across groups."
+(
+    ggplot(compare.to_pandas(), aes("beta", fill="source"))
+    + geom_density(alpha=0.5)
+    + labs(x="beta", y="density", fill="source",
+           title="Prior vs posterior (pooled)")
+    + theme_minimal()
+)
+```
+
+### Prior vs posterior by group
+
+```{python}
+#| fig-cap: "Prior vs posterior density of `beta`, faceted by group."
+(
+    ggplot(compare.to_pandas(), aes("beta", fill="source"))
+    + geom_density(alpha=0.5)
+    + facet_wrap(facets="groups", ncol=2)
+    + labs(x="beta", y="density", fill="source",
+           title="Prior vs posterior by group")
+    + theme_minimal()
+)
+```
+
+### Credible-interval comparison
+
+A different cut: 89% intervals per group, dodged by source — the shrinkage from prior to posterior reads off at a glance.
+
+```{python}
+#| fig-cap: "Prior vs posterior 89% credible intervals of `beta` by group."
+ci = (
+    compare.group_by("groups", "source")
+    .agg(
+        pl.col("beta").quantile(0.055).alias("lower"),
+        pl.col("beta").median().alias("median"),
+        pl.col("beta").quantile(0.945).alias("upper"),
+    )
+    .sort("groups", "source")
+)
+
+(
+    ggplot(ci.to_pandas(), aes("groups", "median", color="source"))
+    + geom_pointrange(
+        aes(ymin="lower", ymax="upper"),
+        position=position_dodge(0.5), size=0.8,
+    )
+    + geom_hline(yintercept=0, linetype="dashed", color="#888888")
+    + labs(x="group", y="beta (89% CrI)", color="source",
+           title="Prior vs posterior credible intervals")
+    + theme_minimal()
+)
+```
+
+`group_name` sets the source column's name, and `groups` accepts any pair of
+`DataTree` groups — not just prior/posterior. See
+[`spread_draws()`](spread_draws.qmd) for the underlying extraction.

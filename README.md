@@ -13,15 +13,18 @@ import polars as pl
 import tidydraws as td
 from xarray import DataArray
 from lets_plot import *
+
 LetsPlot.setup_html()
 
 # A small synthetic posterior: 4 chains × 500 draws × 4 groups
 chains, draws, n_groups = 4, 500, 4
 beta = np.random.normal(1.0, 0.2, (chains, draws, n_groups))
 dt = az.from_dict(
-    {"posterior": {
-        "beta": DataArray(beta, dims=["chain", "draw", "groups"]),
-    }},
+    {
+        "posterior": {
+            "beta": DataArray(beta, dims=["chain", "draw", "groups"]),
+        }
+    },
     coords={"groups": [f"g{i}" for i in range(n_groups)]},
     dims={"beta": ["groups"]},
 )
@@ -32,7 +35,8 @@ beta_draws = td.spread_draws(dt, "beta[groups]")
 
 # ── Summarise and plot with lets-plot ───────────────────────────
 summary = (
-    beta_draws.group_by("groups")
+    beta_draws
+    .group_by("groups")
     .agg(
         pl.col("beta").quantile(0.055).alias("lower"),
         pl.col("beta").median().alias("median"),
@@ -54,7 +58,7 @@ summary = (
 
 Plotting MCMC output in Python requires manual wrangling of `arviz.InferenceData` objects — slicing xarray dimensions, iterating over groups, managing coordinate alignment. This is imperative, boilerplate-heavy, and error-prone.
 
-R's [`tidybayes`](https://github.com/TuringLang/tidybayes) solved this elegantly with a data transformation layer that respects the semantics of parameter space vs. prediction space. `tidydraws` brings the same philosophy to Python — using **Polars DataFrames** so the tidy frame is one `.to_pandas()` away from any plotting backend.
+R's [`tidybayes`](https://github.com/mjskay/tidybayes) solved this elegantly with a data transformation layer that respects the semantics of parameter space vs. prediction space. `tidydraws` brings the same philosophy to Python — using **Polars DataFrames** so the tidy frame is one `.to_pandas()` away from any plotting backend.
 
 | Problem | tidydraws Solution |
 | --- | --- |
@@ -104,4 +108,4 @@ uv add "tidydraws[all]"
 
 ---
 
-*Inspired by [tidybayes](https://github.com/TuringLang/tidybayes) for R.*
+*Inspired by [tidybayes](https://github.com/mjskay/tidybayes) for R.*

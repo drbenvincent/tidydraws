@@ -1,0 +1,163 @@
+---
+title: "Parameter space"
+description: "Extract posterior draws with spread_draws() and plot them"
+status: stable
+---
+
+`spread_draws()` is the entry point: it pulls posterior draws out of an ArviZ `DataTree` into a tidy Polars `DataFrame` — one row per `chain × draw × coordinate`, each variable a column. Hand that frame to any plotting library; `tidydraws` does no plotting itself.
+
+## The string spec
+
+A spec names a variable and, in brackets, the dimensions to spread over. The bracketed names must match coordinate names in the `DataTree`.
+
+| Spec | Meaning | Rows |
+| --- | --- | --- |
+| `"sigma"` | scalar parameter | `chain × draw` |
+| `"beta[groups]"` | one-dimensional array | `chain × draw × groups` |
+| `"gamma[time, groups]"` | nested two-dimensional array | `chain × draw × time × groups` |
+
+Request several variables in one call and `tidydraws` joins them: variables sharing a dimension are inner-joined; a scalar is broadcast across an array's dimensions.
+
+## Setup
+
+A small hierarchical posterior — 4 chains × 500 draws, 4 groups, and a 2-D `gamma[time, groups]`. In practice this `DataTree` comes straight from PyMC or Stan.
+
+```{python}
+#| code-fold: true
+import numpy as np
+import polars as pl
+import arviz as az
+import tidydraws as td
+from xarray import DataArray
+from lets_plot import *
+LetsPlot.setup_html()
+
+np.random.seed(7)
+chains, draws, n_groups, n_time = 4, 500, 4, 3
+beta = np.random.normal(1.0, 0.2, (chains, draws, n_groups))
+intercept = np.random.normal(0.0, 0.5, (chains, draws, n_groups))
+gamma = np.random.normal(0.5, 0.15, (chains, draws, n_time, n_groups))
+sigma = np.random.normal(0.8, 0.1, (chains, draws))
+
+dt = az.from_dict(
+    {"posterior": {
+        "beta": DataArray(beta, dims=["chain", "draw", "groups"]),
+        "intercept": DataArray(intercept, dims=["chain", "draw", "groups"]),
+        "gamma": DataArray(gamma, dims=["chain", "draw", "time", "groups"]),
+        "sigma": DataArray(sigma, dims=["chain", "draw"]),
+    }},
+    coords={
+        "groups": [f"g{i}" for i in range(n_groups)],
+        "time": [f"t{i}" for i in range(n_time)],
+    },
+    dims={"beta": ["groups"], "intercept": ["groups"], "gamma": ["time", "groups"]},
+)
+```
+
+The whole call site is one line:
+
+```{python}
+beta_df = td.spread_draws(dt, "beta[groups]", "intercept[groups]")
+beta_df.head()
+```
+
+## Gallery
+
+### Posterior density by group
+
+```{python}
+#| fig-cap: "Posterior density of `beta` by group."
+(
+    ggplot(beta_df.to_pandas(), aes("beta", fill="groups"))
+    + geom_density(alpha=0.5)
+    + labs(x="beta", y="density", fill="group",
+           title="Posterior distribution of beta by group")
+    + theme_minimal()
+)
+```
+
+### Forest plot (89% credible interval)
+
+Summarise per group with Polars quantiles, then `geom_pointrange`.
+
+```{python}
+#| fig-cap: "Forest plot of `beta` by group (89% credible interval)."
+summary = (
+    beta_df.group_by("groups")
+    .agg(
+        pl.col("beta").quantile(0.055).alias("lower"),
+        pl.col("beta").median().alias("median"),
+        pl.col("beta").quantile(0.945).alias("upper"),
+    )
+    .sort("groups")
+)
+
+(
+    ggplot(summary.to_pandas(), aes("groups", "median"))
+    + geom_pointrange(aes(ymin="lower", ymax="upper"), size=0.8)
+    + geom_hline(yintercept=0, linetype="dashed", color="#888888")
+    + labs(x="group", y="beta", title="Posterior beta by group (89% CrI)")
+    + theme_minimal()
+)
+```
+
+### Parameters against each other (cross-dim join)
+
+Request `beta[groups]` and the scalar `sigma` together: `sigma` is broadcast onto every `beta[groups]` row, so you can colour one by the other directly.
+
+```{python}
+#| fig-cap: "Posterior `beta` by group, coloured by the draw's `sigma` — the cross-dimension join in action."
+mixed = td.spread_draws(dt, "beta[groups]", "sigma")
+
+(
+    ggplot(mixed.to_pandas(), aes("groups", "beta"))
+    + geom_jitter(aes(color="sigma"), width=0.15, alpha=0.15, size=0.8)
+    + scale_color_gradient(low="steelblue", high="firebrick")
+    + labs(x="group", y="beta", color="sigma",
+           title="beta draws coloured by sigma")
+    + theme_minimal()
+)
+```
+
+### Nested two-dimensional parameter
+
+`gamma[time, groups]` spreads over both dims at once — facet to see the full grid.
+
+```{python}
+#| fig-cap: "Posterior density of `gamma` over `time × group`."
+gamma_df = td.spread_draws(dt, "gamma[time, groups]")
+
+(
+    ggplot(gamma_df.to_pandas(), aes("gamma", fill="groups"))
+    + geom_density(alpha=0.5)
+    + facet_wrap(facets="time", ncol=3)
+    + labs(x="gamma", y="density", fill="group",
+           title="Posterior gamma by time x group")
+    + theme_minimal()
+)
+```
+
+::: {.callout-note}
+## Same data, different backend
+
+`tidydraws` returns a Polars `DataFrame`; `.to_pandas()` is the only bridge. The
+same summary frame renders identically with [plotnine](https://plotnine.org/)
+as with lets-plot — swap the import, keep the geoms.
+
+```{python}
+#| fig-cap: "The forest plot above, rendered with plotnine."
+from plotnine import (
+    ggplot, aes, geom_pointrange, geom_hline, labs, theme_minimal,
+)
+
+(
+    ggplot(summary.to_pandas(), aes("groups", "median"))
+    + geom_pointrange(aes(ymin="lower", ymax="upper"), size=0.8)
+    + geom_hline(yintercept=0, linetype="dashed", color="#888888")
+    + labs(x="group", y="beta", title="Posterior beta by group (plotnine)")
+    + theme_minimal()
+)
+```
+:::
+
+Next, join prediction draws to covariates with [`add_epred_draws()`](add_epred_draws.qmd).

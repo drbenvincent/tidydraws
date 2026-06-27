@@ -1,0 +1,146 @@
+## tidydraws
+
+> A tidybayes-inspired data layer for declarative Bayesian visualisation in Python.
+
+`tidydraws` turns MCMC output (ArviZ `DataTree`) into tidy Polars frames that are ready to plot — one `.to_pandas()` away from any ggplot-like backend. It does no plotting itself. Three functions, three spaces:
+
+| Function | Space | Plot archetype |
+| --- | --- | --- |
+| [`spread_draws()`](docs/examples/spread_draws.qmd) | parameter | density, forest, scatter |
+| [`add_epred_draws()`](docs/examples/add_epred_draws.qmd) | prediction | ribbon + line, fit + data |
+| [`spread_draws_compare()`](docs/examples/spread_draws_compare.qmd) | comparison | prior vs posterior, intervals |
+
+```{python}
+#| code-fold: true
+import numpy as np
+import polars as pl
+import arviz as az
+import tidydraws as td
+from xarray import DataArray
+from lets_plot import *
+LetsPlot.setup_html()
+
+np.random.seed(42)
+chains, draws, n_groups = 4, 500, 4
+n_per, total = 20, 80
+group = np.repeat(np.arange(n_groups), n_per)
+x = np.random.normal(10, 5, total)
+true_int = np.random.normal(0, 0.5, n_groups)
+true_slope = np.random.normal(1.0, 0.2, n_groups)
+y = np.array([true_int[g] + true_slope[g] * xi + np.random.normal(0, 0.8)
+              for g, xi in zip(group, x)])
+intercept = np.random.normal(0, 0.5, (chains, draws, n_groups))
+beta = np.random.normal(1.0, 0.2, (chains, draws, n_groups))
+mu = np.zeros((chains, draws, total))
+for i in range(total):
+    g = group[i]
+    mu[:, :, i] = intercept[:, :, g] + beta[:, :, g] * x[i]
+dt = az.from_dict(
+    {
+        "posterior": {
+            "intercept": DataArray(intercept, dims=["chain", "draw", "groups"]),
+            "beta": DataArray(beta, dims=["chain", "draw", "groups"]),
+        },
+        "prior": {
+            "beta": DataArray(np.random.normal(0, 0.5, (chains, draws, n_groups)),
+                              dims=["chain", "draw", "groups"]),
+        },
+        "predictions": {"mu": DataArray(mu, dims=["chain", "draw", "obs_ind"])},
+        "constant_data": {
+            "x": DataArray(x, dims=["obs_ind"]),
+            "group": DataArray(group, dims=["obs_ind"]),
+            "y": DataArray(y, dims=["obs_ind"]),
+        },
+    },
+    coords={"groups": [f"g{i}" for i in range(n_groups)],
+            "obs_ind": list(range(total))},
+    dims={"intercept": ["groups"], "beta": ["groups"],
+          "x": ["obs_ind"], "group": ["obs_ind"], "y": ["obs_ind"]},
+    pred_dims={"mu": ["obs_ind"]},
+)
+
+beta_df = td.spread_draws(dt, "beta[groups]")
+beta_summary = (
+    beta_df.group_by("groups")
+    .agg(
+        pl.col("beta").quantile(0.055).alias("lower"),
+        pl.col("beta").median().alias("median"),
+        pl.col("beta").quantile(0.945).alias("upper"),
+    )
+    .sort("groups")
+)
+compare = td.spread_draws_compare(dt, "beta[groups]")
+pred = td.add_epred_draws(dt, newdata=None, var_name="mu",
+                          constant_data_group="constant_data")
+pred_summary = (
+    pred.group_by("obs_ind", "x", "group")
+    .agg(
+        pl.col("mu").quantile(0.055).alias("lower"),
+        pl.col("mu").median().alias("median"),
+        pl.col("mu").quantile(0.945).alias("upper"),
+    )
+    .sort("x")
+)
+
+p_forest = (
+    ggplot(beta_summary.to_pandas(), aes("groups", "median"))
+    + geom_pointrange(aes(ymin="lower", ymax="upper"), size=0.8)
+    + geom_hline(yintercept=0, linetype="dashed", color="#888888")
+    + labs(x="group", y="beta", title="Forest plot")
+    + theme_minimal()
+)
+p_density = (
+    ggplot(beta_df.to_pandas(), aes("beta", fill="groups"))
+    + geom_density(alpha=0.5)
+    + labs(x="beta", y="density", fill="group", title="Posterior density")
+    + theme_minimal()
+)
+p_compare = (
+    ggplot(compare.to_pandas(), aes("beta", fill="source"))
+    + geom_density(alpha=0.5)
+    + facet_wrap(facets="groups", ncol=2)
+    + labs(x="beta", y="density", fill="source", title="Prior vs posterior")
+    + theme_minimal()
+)
+p_pred = (
+    ggplot(pred_summary.to_pandas(), aes("x"))
+    + geom_ribbon(aes(ymin="lower", ymax="upper", fill=as_discrete("group")), alpha=0.25)
+    + geom_line(aes(y="median", color=as_discrete("group")), size=0.8)
+    + labs(x="x", y="mu", color="group", fill="group", title="Predictive fit")
+    + theme_minimal()
+)
+
+gggrid([p_forest, p_density, p_compare, p_pred], ncol=2)
+```
+
+
+### Install
+
+```bash
+uv add tidydraws              # core data layer only
+uv add "tidydraws[letsplot]"  # with lets-plot
+uv add "tidydraws[plotnine]"  # with plotnine
+```
+
+### Why tidydraws?
+
+Plotting MCMC output in Python means manually slicing xarray dimensions, iterating groups, and aligning coordinates — imperative, verbose, error-prone. R's [`tidybayes`](https://github.com/TuringLang/tidybayes) solved this with a data layer that respects parameter space vs prediction space. `tidydraws` brings that to Python on Polars.
+
+| Task | ArviZ (manual) | tidydraws |
+| --- | --- | --- |
+| Extract `beta[groups]` | `dt.posterior["beta"].values` + reshape | `spread_draws(dt, "beta[groups]")` |
+| Compare prior / posterior | concat two arrays by hand | `spread_draws_compare(dt, "beta[groups]")` |
+| Join predictions to covariates | manual merge on obs index | `add_epred_draws(dt, var_name="mu")` |
+| Subset before plotting | slice after materialising | `.filter(...)` on the returned frame |
+
+::: {.callout-note}
+`tidydraws` is plotting-backend-agnostic: it returns Polars `DataFrame`s, and
+`.to_pandas()` bridges to lets-plot, plotnine, or any library that takes
+pandas. The examples use [lets-plot](https://lets-plot.org/); see the
+[`spread_draws()`](docs/examples/spread_draws.qmd) page for the same plot in
+plotnine.
+:::
+
+---
+
+*Inspired by [tidybayes](https://github.com/TuringLang/tidybayes) for R.*

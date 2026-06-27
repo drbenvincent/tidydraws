@@ -55,17 +55,24 @@ Key point: prefix Python/pytest commands with `uv run` so they use the project's
 ### Key signatures
 
 ```python
-def spread_draws(dt, *var_specs, group="posterior",
-                 chain_dim="chain", draw_dim="draw") -> pl.DataFrame: ...
+def spread_draws(
+    dt, *var_specs, group="posterior", chain_dim="chain", draw_dim="draw"
+) -> pl.DataFrame: ...
 
-def add_epred_draws(dt, newdata, var_name,
-                    idata_group="predictions",
-                    constant_data_group="predictions_constant_data",
-                    join_on="obs_ind") -> pl.DataFrame: ...
 
-def spread_draws_compare(dt, *var_specs,
-                         groups=["posterior", "prior"],
-                         group_name="source") -> pl.DataFrame: ...
+def add_epred_draws(
+    dt,
+    newdata,
+    var_name,
+    idata_group="predictions",
+    constant_data_group="predictions_constant_data",
+    join_on="obs_ind",
+) -> pl.DataFrame: ...
+
+
+def spread_draws_compare(
+    dt, *var_specs, groups=["posterior", "prior"], group_name="source"
+) -> pl.DataFrame: ...
 ```
 
 ### Core helpers (in `_extract.py`)
@@ -73,7 +80,7 @@ def spread_draws_compare(dt, *var_specs,
 - `_parse_var_spec(spec)` → `("beta", ["groups"])`; raise on malformed specs (`"beta["`, `"beta]"`, `"beta[]"`).
 - `_datatree_group_to_df(dt, group)` → `pl.DataFrame` with chain, draw, and all coord columns.
 - `_align_dims(frames)` → inner-join same-dim frames; cross-join different-dim frames with a logged warning.
-- `_coerce_to_dataframe(newdata)` → `pl.DataFrame` from `pl.DataFrame` / `pl.LazyFrame` / `pd.DataFrame`.
+- `_coerce_to_dataframe(newdata)` → `pl.DataFrame` from `pl.DataFrame` / `pd.DataFrame`.
 
 ---
 

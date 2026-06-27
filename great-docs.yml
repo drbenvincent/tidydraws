@@ -22,16 +22,12 @@ dynamic: true
 # README is the landing page; set to "user_guide" to use the first guide page.
 homepage: index
 
-# Narrative tutorials. Files are auto-discovered and ordered by their numeric
-# filename prefix (01-, 02-, ...).
-user_guide: docs/user_guide
 
 # Custom sections beyond the user guide. The directory basename ("examples")
 # becomes the section slug in the built site.
 sections:
   - title: Examples
     dir: docs/examples
-    navbar_after: User Guide
 
 # API Reference ---------------------------------------------------------------
 reference:
