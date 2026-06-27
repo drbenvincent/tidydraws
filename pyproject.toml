@@ -1,9 +1,30 @@
 [project]
 name = "tidydraws"
 version = "0.1.0"
-description = "A tidybayes-inspired data layer for declarative Bayesian visualisation in Python"
-readme = "README.md"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Benjamin Vincent" }]
+keywords = [
+    "bayesian",
+    "mcmc",
+    "visualisation",
+    "dataframe",
+    "tidybayes",
+    "polars",
+    "arviz",
+    "draws",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Topic :: Scientific/Engineering :: Visualization",
+]
 requires-python = ">=3.12"
 dependencies = [
     "polars >=0.20",
@@ -38,6 +59,11 @@ dev = [
     "lets-plot",
     "plotnine",
 ]
+
+[project.urls]
+Homepage = "https://github.com/drbenvincent/tidydraws"
+Repository = "https://github.com/drbenvincent/tidydraws"
+Issues = "https://github.com/drbenvincent/tidydraws/issues"
 
 [build-system]
 requires = ["hatchling"]
