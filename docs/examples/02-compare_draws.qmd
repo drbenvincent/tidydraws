@@ -30,7 +30,6 @@ from lets_plot import (
     ggplot,
     labs,
     position_dodge,
-    theme_minimal,
 )
 
 for parent in [Path.cwd(), *Path.cwd().parents]:
@@ -121,7 +120,6 @@ The prior is deliberately broad; after seeing the data, the posterior concentrat
         size=0.7,
     )
     + labs(x="beta", y="density", fill="source", title="Prior vs posterior slopes")
-    + theme_minimal()
 )
 ```
 
@@ -141,7 +139,6 @@ The prior is deliberately broad; after seeing the data, the posterior concentrat
     )
     + facet_wrap(facets="groups", ncol=2)
     + labs(x="beta", y="density", fill="source", title="Prior vs posterior by group")
-    + theme_minimal()
 )
 ```
 
@@ -180,7 +177,6 @@ ci = (
         color="source",
         title="Prior vs posterior credible intervals",
     )
-    + theme_minimal()
 )
 ```
 

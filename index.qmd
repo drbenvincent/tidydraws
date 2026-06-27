@@ -39,7 +39,6 @@ from lets_plot import (
     gggrid,
     ggplot,
     labs,
-    theme_minimal,
 )
 
 for parent in [Path.cwd(), *Path.cwd().parents]:
@@ -136,20 +135,17 @@ p_forest = (
     + geom_pointrange(aes(ymin="lower", ymax="upper"), size=0.8)
     + geom_hline(yintercept=0, linetype="dashed", color="#888888")
     + labs(x="group", y="beta", title="Forest plot")
-    + theme_minimal()
 )
 p_density = (
     ggplot(beta_df.to_pandas(), aes("beta", fill="groups"))
     + geom_density(alpha=0.5)
     + labs(x="beta", y="density", fill="group", title="Posterior density")
-    + theme_minimal()
 )
 p_compare = (
     ggplot(compare.to_pandas(), aes("beta", fill="source"))
     + geom_density(alpha=0.5)
     + facet_wrap(facets="groups", ncol=2)
     + labs(x="beta", y="density", fill="source", title="Prior vs posterior")
-    + theme_minimal()
 )
 p_pred = (
     ggplot(pred_summary.to_pandas(), aes("x"))
@@ -158,7 +154,6 @@ p_pred = (
     )
     + geom_line(aes(y="median", color=as_discrete("group")), size=0.8)
     + labs(x="x", y="mu", color="group", fill="group", title="Predictive fit")
-    + theme_minimal()
 )
 
 g = gggrid([p_forest, p_density, p_compare, p_pred], ncol=2)
@@ -167,7 +162,7 @@ g
 ```
 
 
-### Install
+## Install
 
  With uv
 ```bash
@@ -179,16 +174,9 @@ With pip
 pip install tidydraws
 ```
 
-### Why tidydraws?
+## Why tidydraws?
 
 Plotting MCMC output in Python means manually slicing xarray dimensions, iterating groups, and aligning coordinates — imperative, verbose, error-prone. R's [`tidybayes`](https://github.com/mjskay/tidybayes) solved this with a data layer that respects parameter space vs prediction space. `tidydraws` brings that to Python on Polars.
-
-| Task | ArviZ (manual) | tidydraws |
-| --- | --- | --- |
-| Extract `beta[groups]` | `dt.posterior["beta"].values` + reshape | `parameter_draws(dt, "beta[groups]")` |
-| Compare prior / posterior | concat two arrays by hand | `compare_draws(dt, "beta[groups]")` |
-| Join predictions to covariates | manual merge on obs index | `prediction_draws(dt, var_name="mu")` |
-| Subset before plotting | slice after materialising | `.filter(...)` on the returned frame |
 
 ::: {.callout-note}
 `tidydraws` is plotting-backend-agnostic: it returns Polars `DataFrame`s, and `.to_pandas()` bridges to lets-plot, plotnine, or any library that takes pandas. The examples use [lets-plot](https://lets-plot.org/); see the [`parameter_draws()`](docs/examples/parameter_draws.qmd) page for the same plot in plotnine.

@@ -47,7 +47,6 @@ from lets_plot import (
     ggplot,
     labs,
     scale_color_gradient,
-    theme_minimal,
 )
 
 for parent in [Path.cwd(), *Path.cwd().parents]:
@@ -76,7 +75,6 @@ The observed data and true generating lines show the group separation before fit
     + labs(
         x="x", y="y", color="group", title="Observed data from known group differences"
     )
-    + theme_minimal()
 )
 ```
 
@@ -150,7 +148,6 @@ The dashed red lines are the true slopes used to simulate the data.
     )
     + facet_wrap(facets="groups", ncol=2)
     + labs(x="beta", y="density", fill="group", title="Posterior slopes by group")
-    + theme_minimal()
 )
 ```
 
@@ -177,7 +174,6 @@ beta_forest = interval_summary(beta_df, "beta", "groups", [0.89])
     )
     + geom_hline(yintercept=0, linetype="dashed", color="#888888")
     + labs(x="group", y="beta", title="Posterior slope forest plot")
-    + theme_minimal()
 )
 ```
 
@@ -216,7 +212,6 @@ quantile_dots = pl.DataFrame([
         size=2.4,
     )
     + labs(x="beta", y="group", title="100-dot posterior summaries")
-    + theme_minimal()
 )
 ```
 
@@ -262,7 +257,6 @@ truth_contrasts = truth.filter(pl.col("groups") != reference_group).select(
         y="beta difference",
         title="Posterior slope contrasts against North",
     )
-    + theme_minimal()
 )
 ```
 
@@ -290,7 +284,6 @@ mixed = td.parameter_draws(dt, "beta[groups]", "sigma")
         color="sigma",
         title="Slope draws coloured by residual scale",
     )
-    + theme_minimal()
 )
 ```
 
@@ -308,7 +301,6 @@ from plotnine import (
     geom_point,
     geom_pointrange,
     labs,
-    theme_minimal,
 )
 
 (
@@ -322,7 +314,6 @@ from plotnine import (
     )
     + geom_hline(yintercept=0, linetype="dashed", color="#888888")
     + labs(x="group", y="beta", title="Posterior slope forest plot (plotnine)")
-    + theme_minimal()
 )
 ```
 ::::

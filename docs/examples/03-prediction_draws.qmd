@@ -181,6 +181,7 @@ observed_points = (
 The same interval plot, now using posterior predictive draws of the observed outcome $y$ rather than the posterior expectation $\mu$. Because $y$ includes the observation noise ($\sigma$), the intervals are wider — they represent the distribution of *new data*, not the mean.
 
 ```{python}
+# | code-fold: true
 # | fig-cap: "Posterior predicted fit by group with nested credible intervals, true lines, and observed data."
 pred_y = td.prediction_draws(dt, newdata=observed, var_name="y").rename({
     "y_right": "y_obs"
