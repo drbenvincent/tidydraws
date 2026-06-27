@@ -52,3 +52,9 @@ seo:
 # Jupyter kernel for executable code cells in .qmd pages (incl. auto-generated
 # API reference). Override per-page in frontmatter if needed.
 jupyter: tidydraws
+
+# Social media cards -----------------------------------------------------------
+include_in_header:
+  - text: '<meta property="og:image" content="https://drbenvincent.github.io/tidydraws/docs/assets/logo.jpg">'
+  - text: '<meta name="twitter:image" content="https://drbenvincent.github.io/tidydraws/docs/assets/logo.jpg">'
+  - text: '<meta name="twitter:card" content="summary_large_image">'
