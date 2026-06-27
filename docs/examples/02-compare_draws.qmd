@@ -1,0 +1,179 @@
+---
+title: "Prior/posterior comparison"
+description: "Fit a PyMC model, compare prior and posterior draws with compare_draws(), and plot them"
+status: stable
+---
+
+`compare_draws()` is the prior/posterior comparison helper: it calls `parameter_draws()` once per selected group in the ArviZ `DataTree`, tags each result with a `source` column, and stacks them into a single `DataFrame`. By default it compares `posterior` against `prior`, which is the workflow most users need after fitting a PyMC model.
+
+## Full PyMC workflow
+
+This example uses the same grouped regression data as the other examples, samples from the model prior before fitting, then compares those prior draws with the fitted posterior. That gives `compare_draws()` real prior draws and real posterior draws from the same PyMC model.
+
+```{python}
+#| code-fold: true
+#| cache: true
+from pathlib import Path
+import sys
+
+import polars as pl
+import pymc as pm
+import tidydraws as td
+from lets_plot import (
+    LetsPlot,
+    aes,
+    facet_wrap,
+    geom_density,
+    geom_hline,
+    geom_pointrange,
+    geom_vline,
+    ggplot,
+    labs,
+    position_dodge,
+    theme_minimal,
+)
+
+for parent in [Path.cwd(), *Path.cwd().parents]:
+    helper_dir = parent / "docs" / "examples"
+    if (helper_dir / "_pymc_workflow.py").exists():
+        sys.path.insert(0, str(helper_dir))
+        break
+
+from _pymc_workflow import simulate_grouped_regression
+
+LetsPlot.setup_html()
+
+workflow = simulate_grouped_regression(seed=2026)
+observed = workflow.observed
+truth = workflow.truth
+```
+
+Build our PyMC model and fit.
+
+```{python}
+coords = {
+    "groups": workflow.group_names,
+    "obs_ind": observed.get_column("obs_ind").to_numpy(),
+}
+
+with pm.Model(coords=coords) as model:
+    x = pm.Data("x", observed.get_column("x").to_numpy(), dims="obs_ind")
+    group_idx = pm.Data(
+        "group_idx",
+        observed.get_column("group_idx").to_numpy().astype("int64"),
+        dims="obs_ind",
+    )
+    intercept = pm.Normal("intercept", mu=0.0, sigma=2.0, dims="groups")
+    beta = pm.Normal("beta", mu=0.0, sigma=1.5, dims="groups")
+    sigma = pm.HalfNormal("sigma", sigma=1.0)
+    mu = pm.Deterministic(
+        "mu",
+        intercept[group_idx] + beta[group_idx] * x,
+        dims="obs_ind",
+    )
+    pm.Normal(
+        "y",
+        mu=mu,
+        sigma=sigma,
+        observed=observed.get_column("y").to_numpy(),
+        dims="obs_ind",
+    )
+    prior = pm.sample_prior_predictive(
+        draws=800,
+        random_seed=2029,
+        var_names=["intercept", "beta", "sigma"],
+    )
+    dt = pm.sample(
+        draws=400,
+        random_seed=2030,
+    )
+
+dt.update(prior)
+```
+
+```{python}
+dt
+```
+
+One call stacks both sources:
+
+```{python}
+compare = td.compare_draws(dt, "beta[groups]")
+compare.head()
+```
+
+## Gallery
+
+### Prior vs posterior (pooled)
+
+The prior is deliberately broad; after seeing the data, the posterior concentrates around the group-specific slopes.
+
+```{python}
+#| fig-cap: "Prior vs posterior density of group-specific slopes, pooled across groups."
+(
+    ggplot(compare.to_pandas(), aes("beta", fill="source"))
+    + geom_density(alpha=0.5)
+    + geom_vline(
+        data=truth.to_pandas(),
+        mapping=aes(xintercept="beta_true"),
+        color="firebrick",
+        linetype="dashed",
+        size=0.7,
+    )
+    + labs(x="beta", y="density", fill="source", title="Prior vs posterior slopes")
+    + theme_minimal()
+)
+```
+
+### Prior vs posterior by group
+
+```{python}
+#| fig-cap: "Prior vs posterior density of group-specific slopes, faceted by group."
+(
+    ggplot(compare.to_pandas(), aes("beta", fill="source"))
+    + geom_density(alpha=0.5)
+    + geom_vline(
+        data=truth.to_pandas(),
+        mapping=aes(xintercept="beta_true"),
+        color="firebrick",
+        linetype="dashed",
+        size=0.7,
+    )
+    + facet_wrap(facets="groups", ncol=2)
+    + labs(x="beta", y="density", fill="source", title="Prior vs posterior by group")
+    + theme_minimal()
+)
+```
+
+### Credible-interval comparison
+
+A different cut: 89% intervals per group, dodged by source. The posterior intervals contract toward the true slopes while the prior intervals remain wide.
+
+```{python}
+#| fig-cap: "Prior vs posterior 89% credible intervals of group-specific slopes."
+ci = (
+    compare.group_by("groups", "source")
+    .agg(
+        pl.col("beta").quantile(0.055).alias("lower"),
+        pl.col("beta").median().alias("median"),
+        pl.col("beta").quantile(0.945).alias("upper"),
+    )
+    .sort("groups", "source")
+)
+
+(
+    ggplot(ci.to_pandas(), aes("groups", "median", color="source"))
+    + geom_pointrange(aes(ymin="lower", ymax="upper"), position=position_dodge(0.5), size=0.8)
+    + geom_pointrange(
+        data=truth.to_pandas(),
+        mapping=aes("groups", "beta_true", ymin="beta_true", ymax="beta_true"),
+        color="firebrick",
+        size=0.7,
+    )
+    + geom_hline(yintercept=0, linetype="dashed", color="#888888")
+    + labs(x="group", y="beta (89% CrI)", color="source", title="Prior vs posterior credible intervals")
+    + theme_minimal()
+)
+```
+
+`group_name` sets the source column's name, and `groups` can compare other `DataTree` groups when needed. Next, join posterior expectations to covariates with [`prediction_draws()`](prediction_draws.qmd).

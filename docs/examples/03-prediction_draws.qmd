@@ -1,0 +1,237 @@
+---
+title: "Prediction space"
+description: "Fit a PyMC model, join posterior expectations to covariates with prediction_draws(), and plot them"
+status: stable
+---
+
+`prediction_draws()` joins posterior prediction draws such as `mu` to covariates, producing one tidy row per `chain × draw × observation`. Parameters are deliberately **excluded** — prediction space stays separate from parameter space, so coefficients never get duplicated across observations.
+
+Pass a `DataFrame` when you want explicit control over the covariates used for plotting. With `newdata=None`, `prediction_draws()` reads covariates from a constant-data group in the `DataTree` and fails loudly if that group is missing.
+
+## Full PyMC workflow
+
+The workflow starts from observed data with strong group differences, fits a PyMC model, asks PyMC for posterior expectations `mu[obs_ind]`, and then uses `prediction_draws()` to attach those draws to `x`, `groups`, and observed `y`.
+
+```{python}
+#| code-fold: true
+#| cache: true
+from pathlib import Path
+import sys
+
+import polars as pl
+import pymc as pm
+import tidydraws as td
+from lets_plot import (
+    LetsPlot,
+    aes,
+    as_discrete,
+    geom_line,
+    geom_point,
+    geom_ribbon,
+    ggplot,
+    labs,
+    theme_minimal,
+)
+
+for parent in [Path.cwd(), *Path.cwd().parents]:
+    helper_dir = parent / "docs" / "examples"
+    if (helper_dir / "_pymc_workflow.py").exists():
+        sys.path.insert(0, str(helper_dir))
+        break
+
+from _pymc_workflow import interval_summary, simulate_grouped_regression
+
+LetsPlot.setup_html()
+
+workflow = simulate_grouped_regression(seed=2026)
+observed = workflow.observed
+
+coords = {
+    "groups": workflow.group_names,
+    "obs_ind": observed.get_column("obs_ind").to_numpy(),
+}
+```
+
+Build our PyMC model and fit.
+
+```{python}
+with pm.Model(coords=coords) as model:
+    x = pm.Data("x", observed.get_column("x").to_numpy(), dims="obs_ind")
+    group_idx = pm.Data(
+        "group_idx",
+        observed.get_column("group_idx").to_numpy().astype("int64"),
+        dims="obs_ind",
+    )
+    intercept = pm.Normal("intercept", mu=0.0, sigma=2.0, dims="groups")
+    beta = pm.Normal("beta", mu=0.0, sigma=1.5, dims="groups")
+    sigma = pm.HalfNormal("sigma", sigma=1.0)
+    mu = pm.Deterministic(
+        "mu",
+        intercept[group_idx] + beta[group_idx] * x,
+        dims="obs_ind",
+    )
+    pm.Normal(
+        "y",
+        mu=mu,
+        sigma=sigma,
+        observed=observed.get_column("y").to_numpy(),
+        dims="obs_ind",
+    )
+    dt = pm.sample(
+        draws=400,
+        tune=400,
+        random_seed=2027,
+    )
+    pm.sample_posterior_predictive(
+        dt,
+        var_names=["mu"],
+        predictions=True,
+        extend_inferencedata=True,
+        random_seed=2028,
+        progressbar=False,
+    )
+```
+
+```{python}
+dt
+```
+
+One call joins `mu` to the observed covariates and responses:
+
+```{python}
+pred = td.prediction_draws(dt, newdata=observed, var_name="mu")
+pred.head()
+```
+
+Note the columns: `chain`, `draw`, `obs_ind`, `mu`, `groups`, `group_idx`, `x`, `mu_true`, and `y`. No `beta`, no `intercept` — parameters stay in their own frame.
+
+## Gallery
+
+### Posterior expected fit by group
+
+Summarise `mu` per observation with 50%, 80%, and 95% intervals, then draw nested ribbons, a median line, the true generating line, and the raw observed `y` values.
+
+```{python}
+#| fig-cap: "Posterior expected fit by group with nested credible ribbons, true lines, and observed data."
+summary = interval_summary(
+    pred, "mu", ["obs_ind", "x", "groups", "mu_true", "y"], [0.50, 0.80, 0.95]
+).sort(["groups", "prob", "x"])
+summary_95 = summary.filter(pl.col("prob") == 0.95)
+summary_80 = summary.filter(pl.col("prob") == 0.80)
+summary_50 = summary.filter(pl.col("prob") == 0.50)
+fit_median = summary_50
+observed_points = summary.select("x", "y", "groups", "mu_true").unique().sort(["groups", "x"])
+
+(
+    ggplot(summary.to_pandas(), aes("x"))
+    + geom_ribbon(
+        data=summary_95.to_pandas(),
+        mapping=aes(ymin="lower", ymax="upper", fill=as_discrete("groups"), group="groups"),
+        alpha=0.10,
+        color="transparent",
+    )
+    + geom_ribbon(
+        data=summary_80.to_pandas(),
+        mapping=aes(ymin="lower", ymax="upper", fill=as_discrete("groups"), group="groups"),
+        alpha=0.18,
+        color="transparent",
+    )
+    + geom_ribbon(
+        data=summary_50.to_pandas(),
+        mapping=aes(ymin="lower", ymax="upper", fill=as_discrete("groups"), group="groups"),
+        alpha=0.28,
+        color="transparent",
+    )
+    + geom_line(
+        data=fit_median.to_pandas(),
+        mapping=aes(y="median", color=as_discrete("groups")),
+        size=0.9,
+    )
+    + geom_line(
+        data=observed_points.to_pandas(),
+        mapping=aes(y="mu_true", color=as_discrete("groups")),
+        linetype="dashed",
+        size=0.8,
+    )
+    + geom_point(
+        data=observed_points.to_pandas(),
+        mapping=aes(y="y", color=as_discrete("groups")),
+        size=1.8,
+        alpha=0.6,
+    )
+    + labs(x="x", y="mu / y", color="group", fill="group", title="Posterior expected fit with observed data")
+    + theme_minimal()
+)
+```
+
+### Group-specific panels
+
+Faceting is optional; the tidy frame already contains the group label needed by any plotting backend.
+
+```{python}
+#| fig-cap: "Posterior expected fit faceted by group."
+from lets_plot import facet_wrap
+
+(
+    ggplot(summary.to_pandas(), aes("x"))
+    + geom_ribbon(data=summary_95.to_pandas(), mapping=aes(ymin="lower", ymax="upper", group="groups"), fill="steelblue", alpha=0.10, color="transparent")
+    + geom_ribbon(data=summary_80.to_pandas(), mapping=aes(ymin="lower", ymax="upper", group="groups"), fill="steelblue", alpha=0.18, color="transparent")
+    + geom_ribbon(data=summary_50.to_pandas(), mapping=aes(ymin="lower", ymax="upper", group="groups"), fill="steelblue", alpha=0.28, color="transparent")
+    + geom_line(data=fit_median.to_pandas(), mapping=aes(y="median"), color="navy", size=0.8)
+    + geom_line(data=observed_points.to_pandas(), mapping=aes(y="mu_true"), color="firebrick", linetype="dashed", size=0.8)
+    + geom_point(data=observed_points.to_pandas(), mapping=aes(y="y"), color="black", size=1.6, alpha=0.55)
+    + facet_wrap(facets="groups", ncol=2)
+    + labs(x="x", y="mu / y", title="Each group's fitted relationship")
+    + theme_minimal()
+)
+```
+
+### Spaghetti posterior expectation lines
+
+Intervals summarise the draw distribution. Spaghetti lines show individual posterior expectation draws directly; here the first 40 `(chain, draw)` pairs are plotted for stability.
+
+```{python}
+#| fig-cap: "Posterior expectation spaghetti lines with observed data."
+draw_ids = (
+    pred.select("chain", "draw")
+    .unique()
+    .sort(["chain", "draw"])
+    .head(40)
+    .with_row_index("curve_id")
+)
+spaghetti = (
+    pred.join(draw_ids, on=["chain", "draw"], how="inner")
+    .with_columns((pl.col("groups") + "_" + pl.col("curve_id").cast(pl.Utf8)).alias("curve"))
+    .sort(["curve", "x"])
+)
+
+(
+    ggplot(spaghetti.to_pandas(), aes("x"))
+    + geom_line(aes(y="mu", group="curve", color=as_discrete("groups")), alpha=0.10, size=0.5)
+    + geom_point(data=observed_points.to_pandas(), mapping=aes(y="y", color=as_discrete("groups")), size=1.7, alpha=0.55)
+    + labs(x="x", y="mu / y", color="group", title="Individual posterior expectation lines")
+    + theme_minimal()
+)
+```
+
+### Filter before plotting
+
+Subset with `.filter()` before summarising — useful when the full prediction space is large.
+
+```{python}
+#| fig-cap: "Posterior expected fit for the West group, with observed data."
+west = td.prediction_draws(dt, newdata=observed, var_name="mu").filter(pl.col("groups") == "West")
+s_west = interval_summary(west, "mu", ["obs_ind", "x", "y", "mu_true"], [0.89]).sort("x")
+
+(
+    ggplot(s_west.to_pandas(), aes("x"))
+    + geom_ribbon(aes(ymin="lower", ymax="upper"), fill="steelblue", alpha=0.3, color="transparent")
+    + geom_line(aes(y="median"), color="navy", size=0.9)
+    + geom_line(aes(y="mu_true"), color="firebrick", linetype="dashed", size=0.8)
+    + geom_point(aes(y="y"), color="black", size=1.6, alpha=0.5)
+    + labs(x="x", y="mu / y", title="West fit with observed data")
+    + theme_minimal()
+)
+```
+
+See [`parameter_draws()`](parameter_draws.qmd) for parameter space, or [`compare_draws()`](compare_draws.qmd) for prior vs posterior.

@@ -48,6 +48,7 @@ dev = [
     "pytest>=9.1.1",
     "lets-plot",
     "plotnine",
+    "pymc>=6.0.1",
 ]
 
 [tool.ruff]

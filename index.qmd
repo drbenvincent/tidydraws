@@ -1,4 +1,6 @@
-# tidydraws
+---
+title: "tidydraws: A tidybayes-inspired data layer for Python"
+---
 
 A tidybayes-inspired data layer for declarative Bayesian visualisation in Python.
 
@@ -12,11 +14,13 @@ A tidybayes-inspired data layer for declarative Bayesian visualisation in Python
 
 ```{python}
 #| code-fold: true
-import numpy as np
+#| cache: true
+from pathlib import Path
+import sys
+
 import polars as pl
-import arviz as az
+import pymc as pm
 import tidydraws as td
-from xarray import DataArray
 from lets_plot import (
     LetsPlot,
     aes,
@@ -32,46 +36,69 @@ from lets_plot import (
     labs,
     theme_minimal,
 )
+
+for parent in [Path.cwd(), *Path.cwd().parents]:
+    helper_dir = parent / "docs" / "examples"
+    if (helper_dir / "_pymc_workflow.py").exists():
+        sys.path.insert(0, str(helper_dir))
+        break
+
+from _pymc_workflow import simulate_grouped_regression
+
 LetsPlot.setup_html()
 
-np.random.seed(42)
-chains, draws, n_groups = 4, 500, 4
-n_per, total = 20, 80
-group = np.repeat(np.arange(n_groups), n_per)
-x = np.random.normal(10, 5, total)
-true_int = np.random.normal(0, 0.5, n_groups)
-true_slope = np.random.normal(1.0, 0.2, n_groups)
-y = np.array([true_int[g] + true_slope[g] * xi + np.random.normal(0, 0.8)
-              for g, xi in zip(group, x)])
-intercept = np.random.normal(0, 0.5, (chains, draws, n_groups))
-beta = np.random.normal(1.0, 0.2, (chains, draws, n_groups))
-mu = np.zeros((chains, draws, total))
-for i in range(total):
-    g = group[i]
-    mu[:, :, i] = intercept[:, :, g] + beta[:, :, g] * x[i]
-dt = az.from_dict(
-    {
-        "posterior": {
-            "intercept": DataArray(intercept, dims=["chain", "draw", "groups"]),
-            "beta": DataArray(beta, dims=["chain", "draw", "groups"]),
-        },
-        "prior": {
-            "beta": DataArray(np.random.normal(0, 0.5, (chains, draws, n_groups)),
-                              dims=["chain", "draw", "groups"]),
-        },
-        "predictions": {"mu": DataArray(mu, dims=["chain", "draw", "obs_ind"])},
-        "constant_data": {
-            "x": DataArray(x, dims=["obs_ind"]),
-            "group": DataArray(group, dims=["obs_ind"]),
-            "y": DataArray(y, dims=["obs_ind"]),
-        },
-    },
-    coords={"groups": [f"g{i}" for i in range(n_groups)],
-            "obs_ind": list(range(total))},
-    dims={"intercept": ["groups"], "beta": ["groups"],
-          "x": ["obs_ind"], "group": ["obs_ind"], "y": ["obs_ind"]},
-    pred_dims={"mu": ["obs_ind"]},
-)
+workflow = simulate_grouped_regression(seed=2026)
+observed = workflow.observed.with_columns(pl.col("groups").alias("group"))
+
+coords = {
+    "groups": workflow.group_names,
+    "obs_ind": observed.get_column("obs_ind").to_numpy(),
+}
+
+with pm.Model(coords=coords) as model:
+    x = pm.Data("x", observed.get_column("x").to_numpy(), dims="obs_ind")
+    group_idx = pm.Data(
+        "group_idx",
+        observed.get_column("group_idx").to_numpy().astype("int64"),
+        dims="obs_ind",
+    )
+    intercept = pm.Normal("intercept", mu=0.0, sigma=2.0, dims="groups")
+    beta = pm.Normal("beta", mu=0.0, sigma=1.5, dims="groups")
+    sigma = pm.HalfNormal("sigma", sigma=1.0)
+    mu = pm.Deterministic(
+        "mu",
+        intercept[group_idx] + beta[group_idx] * x,
+        dims="obs_ind",
+    )
+    pm.Normal(
+        "y",
+        mu=mu,
+        sigma=sigma,
+        observed=observed.get_column("y").to_numpy(),
+        dims="obs_ind",
+    )
+    prior = pm.sample_prior_predictive(
+        draws=800,
+        random_seed=2029,
+        var_names=["intercept", "beta", "sigma"],
+    )
+    dt = pm.sample(
+        draws=400,
+        tune=400,
+        random_seed=2026,
+        progressbar=False,
+        compute_convergence_checks=False,
+    )
+    pm.sample_posterior_predictive(
+        dt,
+        var_names=["mu"],
+        predictions=True,
+        extend_inferencedata=True,
+        random_seed=2028,
+        progressbar=False,
+    )
+
+dt.update(prior)
 
 beta_df = td.parameter_draws(dt, "beta[groups]")
 beta_summary = (
@@ -84,8 +111,7 @@ beta_summary = (
     .sort("groups")
 )
 compare = td.compare_draws(dt, "beta[groups]")
-pred = td.prediction_draws(dt, newdata=None, var_name="mu",
-                          constant_data_group="constant_data")
+pred = td.prediction_draws(dt, newdata=observed, var_name="mu")
 pred_summary = (
     pred.group_by("obs_ind", "x", "group")
     .agg(
@@ -95,7 +121,9 @@ pred_summary = (
     )
     .sort("x")
 )
+```
 
+```{python}
 p_forest = (
     ggplot(beta_summary.to_pandas(), aes("groups", "median"))
     + geom_pointrange(aes(ymin="lower", ymax="upper"), size=0.8)
@@ -128,7 +156,7 @@ gggrid([p_forest, p_density, p_compare, p_pred], ncol=2)
 ```
 
 
-## Install
+### Install
 
  With uv
 ```bash
@@ -140,7 +168,7 @@ With pip
 pip install tidydraws
 ```
 
-## Why tidydraws?
+### Why tidydraws?
 
 Plotting MCMC output in Python means manually slicing xarray dimensions, iterating groups, and aligning coordinates — imperative, verbose, error-prone. R's [`tidybayes`](https://github.com/TuringLang/tidybayes) solved this with a data layer that respects parameter space vs prediction space. `tidydraws` brings that to Python on Polars.
 

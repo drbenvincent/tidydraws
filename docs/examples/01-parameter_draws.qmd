@@ -1,10 +1,10 @@
 ---
 title: "Parameter space"
-description: "Extract posterior draws with parameter_draws() and plot them"
+description: "Fit a PyMC model, extract posterior draws with parameter_draws(), and plot them"
 status: stable
 ---
 
-`parameter_draws()` is the entry point: it pulls posterior draws out of an ArviZ `DataTree` into a tidy Polars `DataFrame` — one row per `chain × draw × coordinate`, each variable a column. Hand that frame to any plotting library; `tidydraws` does no plotting itself.
+`parameter_draws()` is the entry point for parameter-space plots: it pulls posterior draws out of an ArviZ `DataTree` into a tidy Polars `DataFrame` — one row per `chain × draw × coordinate`, each variable a column. This example starts with simulated observed data, fits a real PyMC model, and then uses the resulting posterior draws for densities, intervals, contrasts, and cross-parameter plots.
 
 ## The string spec
 
@@ -14,21 +14,24 @@ A spec names a variable and, in brackets, the dimensions to spread over. The bra
 | --- | --- | --- |
 | `"sigma"` | scalar parameter | `chain × draw` |
 | `"beta[groups]"` | one-dimensional array | `chain × draw × groups` |
-| `"gamma[time, groups]"` | nested two-dimensional array | `chain × draw × time × groups` |
+| `"intercept[groups]"` | another group-level array | `chain × draw × groups` |
 
 Request several variables in one call and `tidydraws` joins them: variables sharing a dimension are inner-joined; a scalar is broadcast across an array's dimensions.
 
-## Setup
+## Full PyMC workflow
 
-A small hierarchical posterior — 4 chains × 500 draws, 4 groups, and a 2-D `gamma[time, groups]`. In practice this `DataTree` comes straight from PyMC or Stan.
+The data are generated from four groups with deliberately different intercepts and slopes, including one negative slope. That separation makes the posterior plots diagnose real group differences rather than noise around one common line.
 
 ```{python}
 #| code-fold: true
+#| cache: true
+from pathlib import Path
+import sys
+
 import numpy as np
 import polars as pl
-import arviz as az
+import pymc as pm
 import tidydraws as td
-from xarray import DataArray
 from lets_plot import (
     LetsPlot,
     aes,
@@ -36,37 +39,89 @@ from lets_plot import (
     geom_density,
     geom_hline,
     geom_jitter,
+    geom_line,
+    geom_linerange,
+    geom_point,
     geom_pointrange,
+    geom_vline,
     ggplot,
     labs,
     scale_color_gradient,
     theme_minimal,
 )
+
+for parent in [Path.cwd(), *Path.cwd().parents]:
+    helper_dir = parent / "docs" / "examples"
+    if (helper_dir / "_pymc_workflow.py").exists():
+        sys.path.insert(0, str(helper_dir))
+        break
+
+from _pymc_workflow import interval_summary, simulate_grouped_regression
+
 LetsPlot.setup_html()
 
-np.random.seed(7)
-chains, draws, n_groups, n_time = 4, 500, 4, 3
-beta = np.random.normal(1.0, 0.2, (chains, draws, n_groups))
-intercept = np.random.normal(0.0, 0.5, (chains, draws, n_groups))
-gamma = np.random.normal(0.5, 0.15, (chains, draws, n_time, n_groups))
-sigma = np.random.normal(0.8, 0.1, (chains, draws))
+workflow = simulate_grouped_regression(seed=2026)
+observed = workflow.observed
+truth = workflow.truth
+```
 
-dt = az.from_dict(
-    {"posterior": {
-        "beta": DataArray(beta, dims=["chain", "draw", "groups"]),
-        "intercept": DataArray(intercept, dims=["chain", "draw", "groups"]),
-        "gamma": DataArray(gamma, dims=["chain", "draw", "time", "groups"]),
-        "sigma": DataArray(sigma, dims=["chain", "draw"]),
-    }},
-    coords={
-        "groups": [f"g{i}" for i in range(n_groups)],
-        "time": [f"t{i}" for i in range(n_time)],
-    },
-    dims={"beta": ["groups"], "intercept": ["groups"], "gamma": ["time", "groups"]},
+The observed data and true generating lines show the group separation before fitting.
+
+```{python}
+#| fig-cap: "Simulated observed data with true group-specific regression lines."
+(
+    ggplot(observed.sort(["groups", "x"]).to_pandas(), aes("x", "y"))
+    + geom_point(aes(color="groups"), alpha=0.65, size=2.0)
+    + geom_line(aes(y="mu_true", color="groups"), size=1.0)
+    + labs(x="x", y="y", color="group", title="Observed data from known group differences")
+    + theme_minimal()
 )
 ```
 
-The whole call site is one line:
+Now we build our PyMC model and fit.
+
+```{python}
+coords = {
+    "groups": workflow.group_names,
+    "obs_ind": observed.get_column("obs_ind").to_numpy(),
+}
+
+with pm.Model(coords=coords) as model:
+    x = pm.Data("x", observed.get_column("x").to_numpy(), dims="obs_ind")
+    group_idx = pm.Data(
+        "group_idx",
+        observed.get_column("group_idx").to_numpy().astype("int64"),
+        dims="obs_ind",
+    )
+    intercept = pm.Normal("intercept", mu=0.0, sigma=2.0, dims="groups")
+    beta = pm.Normal("beta", mu=0.0, sigma=1.5, dims="groups")
+    sigma = pm.HalfNormal("sigma", sigma=1.0)
+    mu = pm.Deterministic(
+        "mu",
+        intercept[group_idx] + beta[group_idx] * x,
+        dims="obs_ind",
+    )
+    pm.Normal(
+        "y",
+        mu=mu,
+        sigma=sigma,
+        observed=observed.get_column("y").to_numpy(),
+        dims="obs_ind",
+    )
+    dt = pm.sample(
+        draws=400,
+        tune=400,
+        random_seed=2026,
+    )
+```
+
+```{python}
+dt
+```
+
+
+
+One `parameter_draws()` call extracts group slopes and intercepts from the fitted posterior:
 
 ```{python}
 beta_df = td.parameter_draws(dt, "beta[groups]", "intercept[groups]")
@@ -77,38 +132,125 @@ beta_df.head()
 
 ### Posterior density by group
 
+The dashed red lines are the true slopes used to simulate the data.
+
 ```{python}
-#| fig-cap: "Posterior density of `beta` by group."
+#| fig-cap: "Posterior density of group-specific slopes, with true values marked."
 (
     ggplot(beta_df.to_pandas(), aes("beta", fill="groups"))
-    + geom_density(alpha=0.5)
-    + labs(x="beta", y="density", fill="group",
-           title="Posterior distribution of beta by group")
+    + geom_density(alpha=0.45)
+    + geom_vline(
+        data=truth.to_pandas(),
+        mapping=aes(xintercept="beta_true"),
+        color="firebrick",
+        linetype="dashed",
+        size=0.8,
+    )
+    + facet_wrap(facets="groups", ncol=2)
+    + labs(x="beta", y="density", fill="group", title="Posterior slopes by group")
     + theme_minimal()
 )
 ```
 
-### Forest plot (89% credible interval)
+### Forest plot
 
-Summarise per group with Polars quantiles, then `geom_pointrange`.
+Summarise each group with one central 89% interval. The red points are the true slopes used to generate the observed data.
 
 ```{python}
-#| fig-cap: "Forest plot of `beta` by group (89% credible interval)."
-summary = (
-    beta_df.group_by("groups")
-    .agg(
-        pl.col("beta").quantile(0.055).alias("lower"),
-        pl.col("beta").median().alias("median"),
-        pl.col("beta").quantile(0.945).alias("upper"),
+#| fig-cap: "Posterior 89% intervals of group-specific slopes, with true values in red."
+beta_forest = interval_summary(beta_df, "beta", "groups", [0.89])
+
+(
+    ggplot(beta_forest.to_pandas(), aes("groups", "median"))
+    + geom_pointrange(
+        aes(ymin="lower", ymax="upper"),
+        color="steelblue",
+        size=0.9,
     )
-    .sort("groups")
+    + geom_point(
+        data=truth.to_pandas(),
+        mapping=aes("groups", "beta_true"),
+        color="firebrick",
+        size=2.4,
+    )
+    + geom_hline(yintercept=0, linetype="dashed", color="#888888")
+    + labs(x="group", y="beta", title="Posterior slope forest plot")
+    + theme_minimal()
+)
+```
+
+### Quantile dotplot
+
+Each row below has 100 equally likely dots from the posterior slope distribution for a group. This is a frequency-format alternative to density plots.
+
+```{python}
+#| fig-cap: "Quantile dotplot of group-specific slopes: each dot represents 1% posterior mass."
+quantiles = np.linspace(0.005, 0.995, 100)
+group_levels = beta_df.select("groups").unique().sort("groups").get_column("groups").to_list()
+quantile_dots = pl.DataFrame([
+    {
+        "groups": group_name,
+        "beta": float(
+            beta_df.filter(pl.col("groups") == group_name)
+            .get_column("beta")
+            .quantile(q)
+        ),
+        "dot": dot,
+    }
+    for group_name in group_levels
+    for dot, q in enumerate(quantiles, start=1)
+])
+
+(
+    ggplot(quantile_dots.to_pandas(), aes("beta", "groups"))
+    + geom_point(size=1.4, alpha=0.65, color="steelblue")
+    + geom_point(
+        data=truth.to_pandas(),
+        mapping=aes("beta_true", "groups"),
+        color="firebrick",
+        size=2.4,
+    )
+    + labs(x="beta", y="group", title="100-dot posterior summaries")
+    + theme_minimal()
+)
+```
+
+### Derived contrasts against a reference group
+
+Because every row keeps its `chain` and `draw`, derived quantities are ordinary dataframe operations. Here each contrast is `beta[group] - beta[North]` within draw, summarised with one 89% interval.
+
+```{python}
+#| fig-cap: "Derived slope contrasts against North, with true contrasts in red."
+reference_group = "North"
+wide_beta = beta_df.pivot(index=["chain", "draw"], on="groups", values="beta")
+contrast_draws = pl.concat([
+    wide_beta.select(
+        "chain",
+        "draw",
+        (pl.col(group_name) - pl.col(reference_group)).alias("contrast"),
+        pl.lit(f"{group_name} - {reference_group}").alias("contrast_name"),
+    )
+    for group_name in group_levels
+    if group_name != reference_group
+])
+contrast_forest = interval_summary(contrast_draws, "contrast", "contrast_name", [0.89])
+reference_truth = truth.filter(pl.col("groups") == reference_group).get_column("beta_true")[0]
+truth_contrasts = truth.filter(pl.col("groups") != reference_group).select(
+    (pl.col("groups") + " - " + pl.lit(reference_group)).alias("contrast_name"),
+    (pl.col("beta_true") - reference_truth).alias("contrast_true"),
 )
 
 (
-    ggplot(summary.to_pandas(), aes("groups", "median"))
-    + geom_pointrange(aes(ymin="lower", ymax="upper"), size=0.8)
+    ggplot(contrast_forest.to_pandas(), aes("contrast_name", "median"))
+    + geom_pointrange(aes(ymin="lower", ymax="upper"), color="steelblue", size=0.9)
+    + geom_point(
+        data=truth_contrasts.to_pandas(),
+        mapping=aes("contrast_name", "contrast_true"),
+        color="firebrick",
+        size=2.4,
+    )
     + geom_hline(yintercept=0, linetype="dashed", color="#888888")
-    + labs(x="group", y="beta", title="Posterior beta by group (89% CrI)")
+    + labs(x="contrast", y="beta difference", title="Posterior slope contrasts against North")
     + theme_minimal()
 )
 ```
@@ -118,58 +260,42 @@ summary = (
 Request `beta[groups]` and the scalar `sigma` together: `sigma` is broadcast onto every `beta[groups]` row, so you can colour one by the other directly.
 
 ```{python}
-#| fig-cap: "Posterior `beta` by group, coloured by the draw's `sigma` — the cross-dimension join in action."
+#| fig-cap: "Posterior slopes by group, coloured by each draw's residual sigma."
 mixed = td.parameter_draws(dt, "beta[groups]", "sigma")
 
 (
     ggplot(mixed.to_pandas(), aes("groups", "beta"))
     + geom_jitter(aes(color="sigma"), width=0.15, alpha=0.15, size=0.8)
+    + geom_point(
+        data=truth.to_pandas(),
+        mapping=aes("groups", "beta_true"),
+        color="black",
+        size=2.0,
+    )
     + scale_color_gradient(low="steelblue", high="firebrick")
-    + labs(x="group", y="beta", color="sigma",
-           title="beta draws coloured by sigma")
+    + labs(x="group", y="beta", color="sigma", title="Slope draws coloured by residual scale")
     + theme_minimal()
 )
 ```
 
-### Nested two-dimensional parameter
-
-`gamma[time, groups]` spreads over both dims at once — facet to see the full grid.
-
-```{python}
-#| fig-cap: "Posterior density of `gamma` over `time × group`."
-gamma_df = td.parameter_draws(dt, "gamma[time, groups]")
-
-(
-    ggplot(gamma_df.to_pandas(), aes("gamma", fill="groups"))
-    + geom_density(alpha=0.5)
-    + facet_wrap(facets="time", ncol=3)
-    + labs(x="gamma", y="density", fill="group",
-           title="Posterior gamma by time x group")
-    + theme_minimal()
-)
-```
-
-::: {.callout-note}
+:::: {.callout-note}
 ## Same data, different backend
 
-`tidydraws` returns a Polars `DataFrame`; `.to_pandas()` is the only bridge. The
-same summary frame renders identically with [plotnine](https://plotnine.org/)
-as with lets-plot — swap the import, keep the geoms.
+`tidydraws` returns a Polars `DataFrame`; `.to_pandas()` is the only bridge. The same forest-plot frame renders identically with [plotnine](https://plotnine.org/) as with lets-plot — swap the import, keep the geoms.
 
 ```{python}
-#| fig-cap: "The forest plot above, rendered with plotnine."
-from plotnine import (
-    ggplot, aes, geom_pointrange, geom_hline, labs, theme_minimal,
-)
+#| fig-cap: "The 89% slope forest plot above, rendered with plotnine."
+from plotnine import ggplot, aes, geom_hline, geom_point, geom_pointrange, labs, theme_minimal
 
 (
-    ggplot(summary.to_pandas(), aes("groups", "median"))
-    + geom_pointrange(aes(ymin="lower", ymax="upper"), size=0.8)
+    ggplot(beta_forest.to_pandas(), aes("groups", "median"))
+    + geom_pointrange(aes(ymin="lower", ymax="upper"), color="steelblue", size=0.8)
+    + geom_point(data=truth.to_pandas(), mapping=aes("groups", "beta_true"), color="firebrick", size=2.0)
     + geom_hline(yintercept=0, linetype="dashed", color="#888888")
-    + labs(x="group", y="beta", title="Posterior beta by group (plotnine)")
+    + labs(x="group", y="beta", title="Posterior slope forest plot (plotnine)")
     + theme_minimal()
 )
 ```
-:::
+::::
 
-Next, join prediction draws to covariates with [`prediction_draws()`](prediction_draws.qmd).
+Next, compare fitted posterior draws with model priors using [`compare_draws()`](compare_draws.qmd).
