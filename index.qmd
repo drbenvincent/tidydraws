@@ -1,5 +1,5 @@
 ---
-title: "tidydraws: A tidybayes-inspired data layer for Python"
+title: "tidydraws"
 ---
 
 A tidybayes-inspired data layer for declarative Bayesian visualisation in Python.
