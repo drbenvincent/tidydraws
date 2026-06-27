@@ -806,21 +806,21 @@ The shift to ArviZ 1.0 impacts tidydraws in these ways:
 ### v0.1 — Data Layer + Core Docs (core value)
 
 **Code:**
-- [ ] `_datatree_group_to_df()` — generic DataTree group → Polars DataFrame
-- [ ] `_parse_var_spec()` — string spec parser supporting nested dims (e.g., `"beta[groups, time]"`)
-- [ ] `spread_draws()` — extract parameter draws, supporting any group (posterior, prior, etc.)
-- [ ] `spread_draws_compare()` — helper for stacking and comparing multiple groups (e.g., posterior vs. prior)
-- [ ] `add_epred_draws()` — prediction draws joined to covariate grid, with configurable constant data group
-- [ ] Tests: row count validation (primary), numerical spot-checks, eager DataFrame semantics, group parameter, error handling
+- [x] `_datatree_group_to_df()` — generic DataTree group → Polars DataFrame
+- [x] `_parse_var_spec()` — string spec parser supporting nested dims (e.g., `"beta[groups, time]"`)
+- [x] `spread_draws()` — extract parameter draws, supporting any group (posterior, prior, etc.)
+- [x] `spread_draws_compare()` — helper for stacking and comparing multiple groups (e.g., posterior vs. prior)
+- [x] `add_epred_draws()` — prediction draws joined to covariate grid, with configurable constant data group
+- [x] Tests: row count validation (primary), numerical spot-checks, eager DataFrame semantics, group parameter, error handling
 
 **Docs:**
-- [ ] `docs/user_guide/01-quickstart.qmd` — 5-min intro with both posterior and prior extraction
-- [ ] `docs/user_guide/02-parameter-space.qmd` — Forest plots, prior vs. posterior comparison
-- [ ] `docs/user_guide/03-prediction-space.qmd` — Posterior predictive fits and credible intervals
-- [ ] `docs/user_guide/04-migration-from-arviz.qmd` — Migration guide from ArviZ imperative approach
-- [ ] `docs/examples/linear-regression.qmd` — Worked example with group-level effects
-- [ ] API reference auto-generated and linked to guide sections
-- [ ] README with quick start
+- [x] `docs/user_guide/01-quickstart.qmd` — 5-min intro with both posterior and prior extraction
+- [x] `docs/user_guide/02-parameter-space.qmd` — Forest plots, prior vs. posterior comparison
+- [x] `docs/user_guide/03-prediction-space.qmd` — Posterior predictive fits and credible intervals
+- [x] `docs/user_guide/04-migration-from-arviz.qmd` — Migration guide from ArviZ imperative approach
+- [x] `docs/examples/linear-regression.qmd` — Worked example with group-level effects
+- [x] API reference auto-generated and linked to guide sections
+- [x] README with quick start
 - [ ] GitHub Pages site deployed via Great Docs
 
 ### v0.2 — Plotting Stats Layer + Backend Parity
@@ -833,9 +833,9 @@ The shift to ArviZ 1.0 impacts tidydraws in these ways:
 - [ ] Backend dispatch logic for lets-plot and plotnine
 
 **Docs:**
-- [ ] `docs/user_guide/05-backends.qmd` — Side-by-side lets-plot and plotnine examples
+- [x] `docs/user_guide/05-backends.qmd` — Side-by-side lets-plot and plotnine examples
 - [ ] `docs/examples/hierarchical-model.qmd` — Multi-level example demonstrating both backends
-- [ ] Backend-agnostic examples showing data layer works with any plotting library
+- [x] Backend-agnostic examples showing data layer works with any plotting library
 
 ### v0.3 — Advanced Features & Comprehensive Docs
 
