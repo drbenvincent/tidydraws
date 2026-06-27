@@ -182,10 +182,12 @@ The same interval plot, now using posterior predictive draws of the observed out
 
 ```{python}
 # | fig-cap: "Posterior predicted fit by group with nested credible intervals, true lines, and observed data."
-pred_y = td.prediction_draws(dt, newdata=observed, var_name="y")
+pred_y = td.prediction_draws(dt, newdata=observed, var_name="y").rename({
+    "y_right": "y_obs"
+})
 
 summary_y = interval_summary(
-    pred_y, "y", ["obs_ind", "x", "groups", "mu_true", "y"], [0.50, 0.80, 0.95]
+    pred_y, "y", ["obs_ind", "x", "groups", "mu_true", "y_obs"], [0.50, 0.80, 0.95]
 ).sort(["groups", "prob", "x"])
 summary_y_95 = summary_y.filter(pl.col("prob") == 0.95)
 summary_y_80 = summary_y.filter(pl.col("prob") == 0.80)
