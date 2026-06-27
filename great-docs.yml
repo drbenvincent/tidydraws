@@ -7,7 +7,7 @@ display_name: tidydraws
 
 # Explicit GitHub repo so source links and the changelog fail loudly if the
 # repo ever moves, rather than silently mis-resolving.
-repo: drbenvincent/tidy-draws
+repo: drbenvincent/tidydraws
 github_style:
   source: true
 
@@ -47,7 +47,7 @@ dark_mode_toggle: true
 # social-card absolute URLs.
 seo:
   canonical:
-    base_url: https://drbenvincent.github.io/tidy-draws/
+    base_url: https://drbenvincent.github.io/tidydraws/
 
 # Jupyter kernel for executable code cells in .qmd pages (incl. auto-generated
 # API reference). Override per-page in frontmatter if needed.
