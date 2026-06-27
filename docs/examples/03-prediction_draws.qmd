@@ -30,7 +30,6 @@ from lets_plot import (
     geom_ribbon,
     ggplot,
     labs,
-    theme_minimal,
 )
 
 for parent in [Path.cwd(), *Path.cwd().parents]:
@@ -84,7 +83,7 @@ with pm.Model(coords=coords) as model:
     )
     pm.sample_posterior_predictive(
         dt,
-        var_names=["mu"],
+        var_names=["mu", "y"],
         predictions=True,
         extend_inferencedata=True,
         random_seed=2028,
@@ -174,7 +173,6 @@ observed_points = (
         fill="group",
         title="Posterior expected fit with observed data",
     )
-    + theme_minimal()
 )
 ```
 
@@ -228,7 +226,6 @@ from lets_plot import facet_wrap
     )
     + facet_wrap(facets="groups", ncol=2)
     + labs(x="x", y="mu / y", title="Each group's fitted relationship")
-    + theme_minimal()
 )
 ```
 
@@ -269,7 +266,46 @@ spaghetti = (
     + labs(
         x="x", y="mu / y", color="group", title="Individual posterior expectation lines"
     )
-    + theme_minimal()
+)
+```
+
+### Spaghetti posterior predictive lines
+
+The same spaghetti plot, now using posterior predictive draws of the observed outcome $y$ rather than the posterior expectation $\mu$. Because $y$ includes the observation noise ($\sigma$), the lines are more dispersed — they represent the distribution of *new data*, not the mean.
+
+```{python}
+# | fig-cap: "Posterior predictive spaghetti lines — same model, now including observation noise."
+pred_y = td.prediction_draws(dt, newdata=observed, var_name="y")
+
+draw_ids_y = (
+    pred_y
+    .select("chain", "draw")
+    .unique()
+    .sort(["chain", "draw"])
+    .head(40)
+    .with_row_index("curve_id")
+)
+spaghetti_y = (
+    pred_y
+    .join(draw_ids_y, on=["chain", "draw"], how="inner")
+    .with_columns(
+        (pl.col("groups") + "_" + pl.col("curve_id").cast(pl.Utf8)).alias("curve")
+    )
+    .sort(["curve", "x"])
+)
+
+(
+    ggplot(spaghetti_y.to_pandas(), aes("x"))
+    + geom_line(
+        aes(y="y", group="curve", color=as_discrete("groups")), alpha=0.10, size=0.5
+    )
+    + geom_point(
+        data=observed_points.to_pandas(),
+        mapping=aes(y="y", color=as_discrete("groups")),
+        size=1.7,
+        alpha=0.55,
+    )
+    + labs(x="x", y="y", color="group", title="Individual posterior predictive lines")
 )
 ```
 
@@ -298,7 +334,6 @@ s_west = interval_summary(west, "mu", ["obs_ind", "x", "y", "mu_true"], [0.89]).
     + geom_line(aes(y="mu_true"), color="firebrick", linetype="dashed", size=0.8)
     + geom_point(aes(y="y"), color="black", size=1.6, alpha=0.5)
     + labs(x="x", y="mu / y", title="West fit with observed data")
-    + theme_minimal()
 )
 ```
 
