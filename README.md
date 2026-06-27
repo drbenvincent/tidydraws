@@ -6,9 +6,9 @@
 
 | Function | Space | Plot archetype |
 | --- | --- | --- |
-| [`parameter_draws()`](https://drbenvincent.github.io/tidy-draws/docs/examples/parameter_draws.html) | parameter | density, forest, scatter |
-| [`prediction_draws()`](https://drbenvincent.github.io/tidy-draws/docs/examples/prediction_draws.html) | prediction | ribbon + line, fit + data |
-| [`compare_draws()`](https://drbenvincent.github.io/tidy-draws/docs/examples/compare_draws.html) | comparison | prior vs posterior, intervals |
+| [`parameter_draws()`](https://drbenvincent.github.io/tidydraws/docs/examples/parameter_draws.html) | parameter | density, forest, scatter |
+| [`prediction_draws()`](https://drbenvincent.github.io/tidydraws/docs/examples/prediction_draws.html) | prediction | ribbon + line, fit + data |
+| [`compare_draws()`](https://drbenvincent.github.io/tidydraws/docs/examples/compare_draws.html) | comparison | prior vs posterior, intervals |
 
 ![tidydraws example](docs/assets/index-plot.png)
 
@@ -26,7 +26,7 @@ pip install tidydraws
 
 ## Why tidydraws?
 
-Plotting MCMC output in Python means manually slicing xarray dimensions, iterating groups, and aligning coordinates — imperative, verbose, error-prone. R's [`tidybayes`](https://github.com/TuringLang/tidybayes) solved this with a data layer that respects parameter space vs prediction space. `tidydraws` brings that to Python on Polars.
+Plotting MCMC output in Python means manually slicing xarray dimensions, iterating groups, and aligning coordinates — imperative, verbose, error-prone. R's [`tidybayes`](https://github.com/mjskay/tidybayes) solved this with a data layer that respects parameter space vs prediction space. `tidydraws` brings that to Python on Polars.
 
 | Task | ArviZ (manual) | tidydraws |
 | --- | --- | --- |
@@ -35,8 +35,8 @@ Plotting MCMC output in Python means manually slicing xarray dimensions, iterati
 | Join predictions to covariates | manual merge on obs index | `prediction_draws(dt, var_name="mu")` |
 | Subset before plotting | slice after materialising | `.filter(...)` on the returned frame |
 
-> **Backend-agnostic:** `tidydraws` returns Polars `DataFrame`s. Call `.to_pandas()` to bridge to lets-plot, plotnine, or any library that takes pandas. See the [examples](https://drbenvincent.github.io/tidy-draws/docs/examples/parameter_draws.html) for both lets-plot and plotnine versions.
+> **Backend-agnostic:** `tidydraws` returns Polars `DataFrame`s. Call `.to_pandas()` to bridge to lets-plot, plotnine, or any library that takes pandas. See the [examples](https://drbenvincent.github.io/tidydraws/docs/examples/parameter_draws.html) for both lets-plot and plotnine versions.
 
 ---
 
-*Inspired by [tidybayes](https://github.com/TuringLang/tidybayes) for R.*
+*Inspired by [tidybayes](https://github.com/mjskay/tidybayes) for R.*
