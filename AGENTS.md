@@ -2,7 +2,7 @@
 
 **Style:** No hard line breaks in prose.
 
-tidydraws is a tidybayes-inspired data layer for Bayesian visualisation in Python. It extracts MCMC draws from ArviZ 1.0 DataTrees into tidy Polars DataFrames. Full design is in PRD.md. Per-phase agent definitions are in `.github/agents/`.
+tidydraws is a tidybayes-inspired data layer for Bayesian visualisation in Python. It extracts MCMC draws from ArviZ 1.0 DataTrees into tidy Polars DataFrames. This file holds the hard rules, signatures, and design rationale for agents working in the repo.
 
 ---
 
@@ -86,14 +86,3 @@ def spread_draws_compare(dt, *var_specs,
 - Running `pytest`/`python` without `uv run` (wrong environment).
 
 ---
-
-## How to Run the Phases (coordinator pattern)
-
-A coordinator agent works through phases sequentially:
-
-1. Read the phase description from the matching `.github/agents/phase-N-*.agent.md`.
-2. Invoke that specialized agent.
-3. Validate its output against the phase checklist.
-4. If all pass, proceed to the next phase.
-
-Files to reference: PRD.md (full design), this file (rules + decisions), `.github/agents/*.agent.md` (per-phase detail).
