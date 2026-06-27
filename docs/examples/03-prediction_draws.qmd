@@ -176,6 +176,75 @@ observed_points = (
 )
 ```
 
+### Posterior predicted fit by group
+
+The same interval plot, now using posterior predictive draws of the observed outcome $y$ rather than the posterior expectation $\mu$. Because $y$ includes the observation noise ($\sigma$), the intervals are wider — they represent the distribution of *new data*, not the mean.
+
+```{python}
+# | fig-cap: "Posterior predicted fit by group with nested credible intervals, true lines, and observed data."
+pred_y = td.prediction_draws(dt, newdata=observed, var_name="y")
+
+summary_y = interval_summary(
+    pred_y, "y", ["obs_ind", "x", "groups", "mu_true", "y"], [0.50, 0.80, 0.95]
+).sort(["groups", "prob", "x"])
+summary_y_95 = summary_y.filter(pl.col("prob") == 0.95)
+summary_y_80 = summary_y.filter(pl.col("prob") == 0.80)
+summary_y_50 = summary_y.filter(pl.col("prob") == 0.50)
+pred_median = summary_y_50
+
+(
+    ggplot(summary_y.to_pandas(), aes("x"))
+    + geom_ribbon(
+        data=summary_y_95.to_pandas(),
+        mapping=aes(
+            ymin="lower", ymax="upper", fill=as_discrete("groups"), group="groups"
+        ),
+        alpha=0.10,
+        color="transparent",
+    )
+    + geom_ribbon(
+        data=summary_y_80.to_pandas(),
+        mapping=aes(
+            ymin="lower", ymax="upper", fill=as_discrete("groups"), group="groups"
+        ),
+        alpha=0.18,
+        color="transparent",
+    )
+    + geom_ribbon(
+        data=summary_y_50.to_pandas(),
+        mapping=aes(
+            ymin="lower", ymax="upper", fill=as_discrete("groups"), group="groups"
+        ),
+        alpha=0.28,
+        color="transparent",
+    )
+    + geom_line(
+        data=pred_median.to_pandas(),
+        mapping=aes(y="median", color=as_discrete("groups")),
+        size=0.9,
+    )
+    + geom_line(
+        data=observed_points.to_pandas(),
+        mapping=aes(y="mu_true", color=as_discrete("groups")),
+        linetype="dashed",
+        size=0.8,
+    )
+    + geom_point(
+        data=observed_points.to_pandas(),
+        mapping=aes(y="y", color=as_discrete("groups")),
+        size=1.8,
+        alpha=0.6,
+    )
+    + labs(
+        x="x",
+        y="y",
+        color="group",
+        fill="group",
+        title="Posterior predicted fit with observed data",
+    )
+)
+```
+
 ### Group-specific panels
 
 Faceting is optional; the tidy frame already contains the group label needed by any plotting backend.
@@ -266,46 +335,6 @@ spaghetti = (
     + labs(
         x="x", y="mu / y", color="group", title="Individual posterior expectation lines"
     )
-)
-```
-
-### Spaghetti posterior predictive lines
-
-The same spaghetti plot, now using posterior predictive draws of the observed outcome $y$ rather than the posterior expectation $\mu$. Because $y$ includes the observation noise ($\sigma$), the lines are more dispersed — they represent the distribution of *new data*, not the mean.
-
-```{python}
-# | fig-cap: "Posterior predictive spaghetti lines — same model, now including observation noise."
-pred_y = td.prediction_draws(dt, newdata=observed, var_name="y")
-
-draw_ids_y = (
-    pred_y
-    .select("chain", "draw")
-    .unique()
-    .sort(["chain", "draw"])
-    .head(40)
-    .with_row_index("curve_id")
-)
-spaghetti_y = (
-    pred_y
-    .join(draw_ids_y, on=["chain", "draw"], how="inner")
-    .with_columns(
-        (pl.col("groups") + "_" + pl.col("curve_id").cast(pl.Utf8)).alias("curve")
-    )
-    .sort(["curve", "x"])
-)
-
-(
-    ggplot(spaghetti_y.to_pandas(), aes("x"))
-    + geom_line(
-        aes(y="y", group="curve", color=as_discrete("groups")), alpha=0.10, size=0.5
-    )
-    + geom_point(
-        data=observed_points.to_pandas(),
-        mapping=aes(y="y", color=as_discrete("groups")),
-        size=1.7,
-        alpha=0.55,
-    )
-    + labs(x="x", y="y", color="group", title="Individual posterior predictive lines")
 )
 ```
 
