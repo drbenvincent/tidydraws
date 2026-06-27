@@ -31,6 +31,7 @@ from lets_plot import (
     geom_line,
     geom_pointrange,
     geom_ribbon,
+    ggsave,
     gggrid,
     ggplot,
     labs,
@@ -152,7 +153,9 @@ p_pred = (
     + theme_minimal()
 )
 
-gggrid([p_forest, p_density, p_compare, p_pred], ncol=2)
+g = gggrid([p_forest, p_density, p_compare, p_pred], ncol=2)
+ggsave(g, "index-plot.png", path="..", scale=1.5)
+g
 ```
 
 
