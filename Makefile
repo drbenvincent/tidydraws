@@ -1,14 +1,15 @@
 # Makefile for tidydraws development workflow
 
-.PHONY: help install test lint type-check docs docs-preview cleandocs build clean
+.PHONY: help install test lint type-check precommit docs docs-preview cleandocs build clean
 
 # Help target to show available commands
 help:
 	@echo "Available commands:"
-	@echo "  install       - Install dependencies with uv"
+	@echo "  install       - Install all dependencies (incl. dev) with uv"
 	@echo "  test          - Run all tests"
 	@echo "  lint          - Run code linting with ruff"
 	@echo "  type-check    - Run type checking with mypy"
+	@echo "  precommit     - Run prek (pre-commit) hooks on all files"
 	@echo "  docs          - Build the documentation site (great-docs)"
 	@echo "  docs-preview  - Build and serve the docs locally with live reload"
 	@echo "  cleandocs     - Remove the ephemeral great-docs/ build directory"
@@ -16,7 +17,7 @@ help:
 
 # Install dependencies
 install:
-	uv sync
+	uv sync --all-extras
 
 # Run tests
 test:
@@ -28,7 +29,11 @@ lint:
 
 # Type check with mypy
 type-check:
-	uv run mypy .
+	uv run mypy tidydraws
+
+# Run pre-commit hooks via prek
+precommit:
+	uv run prek run --all-files
 
 # Build the documentation site into the ephemeral great-docs/_site/ directory
 docs:

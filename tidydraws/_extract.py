@@ -7,6 +7,7 @@ import xarray as xr
 
 logger = logging.getLogger("tidydraws")
 
+
 def _parse_var_spec(spec: str) -> Tuple[str, List[str]]:
     """
     Parse a variable specification string into (variable_name, list_of_dimensions).
@@ -43,6 +44,7 @@ def _parse_var_spec(spec: str) -> Tuple[str, List[str]]:
 
     return var_name, dims
 
+
 def _datatree_group_to_df(dt, group: str) -> pl.DataFrame:
     """
     Convert a DataTree group to a Polars DataFrame containing all coordinates and variables.
@@ -65,7 +67,10 @@ def _datatree_group_to_df(dt, group: str) -> pl.DataFrame:
 
     return pl.from_pandas(df)
 
-def _align_dims(frames: List[pl.DataFrame], chain_dim: str = "chain", draw_dim: str = "draw") -> pl.DataFrame:
+
+def _align_dims(
+    frames: List[pl.DataFrame], chain_dim: str = "chain", draw_dim: str = "draw"
+) -> pl.DataFrame:
     """
     Combine multiple DataFrames by joining on shared dimensions.
 
@@ -92,7 +97,7 @@ def _align_dims(frames: List[pl.DataFrame], chain_dim: str = "chain", draw_dim: 
         # Check if this is a cross-join (only chain/draw shared)
         if len(common_cols) == 2:
             logger.warning(
-                f"Cross-join detected between frame {i-1} and {i}. "
+                f"Cross-join detected between frame {i - 1} and {i}. "
                 f"Broadcasting scalar or differently-dimensioned variable on dims {common_cols}."
             )
 
@@ -100,6 +105,7 @@ def _align_dims(frames: List[pl.DataFrame], chain_dim: str = "chain", draw_dim: 
         result = result.join(next_frame, on=common_cols, how="inner")
 
     return result
+
 
 def spread_draws(
     dt: xr.DataTree,
@@ -305,10 +311,11 @@ def _coerce_to_dataframe(newdata) -> pl.DataFrame:
         return newdata.collect()
     try:
         import pandas as pd
+
+        if isinstance(newdata, pd.DataFrame):
+            return pl.from_pandas(newdata)
     except ImportError:
-        pd = None
-    if pd is not None and isinstance(newdata, pd.DataFrame):
-        return pl.from_pandas(newdata)
+        pass
     raise TypeError(
         "newdata must be one of: pl.DataFrame, pl.LazyFrame, pd.DataFrame, or None."
     )

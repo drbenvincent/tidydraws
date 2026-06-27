@@ -35,11 +35,13 @@ intercept = np.random.normal(0.0, 0.5, (chains, draws, n_groups))
 sigma = np.random.normal(0.8, 0.1, (chains, draws))
 
 dt = az.from_dict(
-    {"posterior": {
-        "beta": DataArray(beta, dims=["chain", "draw", "groups"]),
-        "intercept": DataArray(intercept, dims=["chain", "draw", "groups"]),
-        "sigma": DataArray(sigma, dims=["chain", "draw"]),
-    }},
+    {
+        "posterior": {
+            "beta": DataArray(beta, dims=["chain", "draw", "groups"]),
+            "intercept": DataArray(intercept, dims=["chain", "draw", "groups"]),
+            "sigma": DataArray(sigma, dims=["chain", "draw"]),
+        }
+    },
     coords={"groups": [f"g{i}" for i in range(n_groups)]},
     dims={"beta": ["groups"], "intercept": ["groups"]},
 )
@@ -57,13 +59,15 @@ beta_df.head()
 ## Forest plot — lets-plot
 
 ```{python}
-#| fig-cap: "Forest plot of `beta` by group (89% CrI) — lets-plot."
+# | fig-cap: "Forest plot of `beta` by group (89% CrI) — lets-plot."
 
 from lets_plot import *
+
 LetsPlot.setup_html()
 
 summary = (
-    beta_df.group_by("groups")
+    beta_df
+    .group_by("groups")
     .agg(
         pl.col("beta").quantile(0.055).alias("lower"),
         pl.col("beta").median().alias("median"),
@@ -86,7 +90,7 @@ summary = (
 The same summary frame, the same geoms, a different backend.
 
 ```{python}
-#| fig-cap: "Forest plot of `beta` by group (89% CrI) — plotnine."
+# | fig-cap: "Forest plot of `beta` by group (89% CrI) — plotnine."
 
 from plotnine import *
 
@@ -104,7 +108,7 @@ from plotnine import *
 Now a prediction-space example. We build a `DataTree` with predictions and constant data, extract with `add_epred_draws()`, and plot a ribbon + median line.
 
 ```{python}
-#| fig-cap: "Posterior predictive fit by group — lets-plot."
+# | fig-cap: "Posterior predictive fit by group — lets-plot."
 
 n_obs = 60
 x_vals = np.linspace(0, 20, n_obs)
@@ -130,18 +134,26 @@ pred_dt = az.from_dict(
             "group": DataArray(group_labels, dims=["obs_ind"]),
         },
     },
-    coords={"groups": [f"g{i}" for i in range(n_groups)],
-            "obs_ind": list(range(n_obs))},
-    dims={"beta": ["groups"], "intercept": ["groups"],
-          "x": ["obs_ind"], "group": ["obs_ind"]},
+    coords={
+        "groups": [f"g{i}" for i in range(n_groups)],
+        "obs_ind": list(range(n_obs)),
+    },
+    dims={
+        "beta": ["groups"],
+        "intercept": ["groups"],
+        "x": ["obs_ind"],
+        "group": ["obs_ind"],
+    },
     pred_dims={"mu": ["obs_ind"]},
 )
 
-pred = td.add_epred_draws(pred_dt, newdata=None, var_name="mu",
-                          constant_data_group="constant_data")
+pred = td.add_epred_draws(
+    pred_dt, newdata=None, var_name="mu", constant_data_group="constant_data"
+)
 
 pred_summary = (
-    pred.group_by("obs_ind", "x", "group")
+    pred
+    .group_by("obs_ind", "x", "group")
     .agg(
         pl.col("mu").quantile(0.055).alias("lower"),
         pl.col("mu").median().alias("median"),
@@ -154,8 +166,13 @@ pred_summary = (
     ggplot(pred_summary.to_pandas(), aes(x="x"))
     + geom_ribbon(aes(ymin="lower", ymax="upper", fill="factor(group)"), alpha=0.25)
     + geom_line(aes(y="median", color="factor(group)"), size=0.8)
-    + labs(x="x", y="mu", color="group", fill="group",
-           title="Posterior predictive fit (lets-plot)")
+    + labs(
+        x="x",
+        y="mu",
+        color="group",
+        fill="group",
+        title="Posterior predictive fit (lets-plot)",
+    )
     + theme_minimal()
 )
 ```
@@ -165,14 +182,19 @@ pred_summary = (
 Same `pred_summary` frame, plotnine rendering.
 
 ```{python}
-#| fig-cap: "Posterior predictive fit by group — plotnine."
+# | fig-cap: "Posterior predictive fit by group — plotnine."
 
 (
     ggplot(pred_summary.to_pandas(), aes(x="x"))
     + geom_ribbon(aes(ymin="lower", ymax="upper", fill="factor(group)"), alpha=0.25)
     + geom_line(aes(y="median", color="factor(group)"), size=0.8)
-    + labs(x="x", y="mu", color="group", fill="group",
-           title="Posterior predictive fit (plotnine)")
+    + labs(
+        x="x",
+        y="mu",
+        color="group",
+        fill="group",
+        title="Posterior predictive fit (plotnine)",
+    )
     + theme_minimal()
 )
 ```

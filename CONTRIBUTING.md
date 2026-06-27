@@ -57,7 +57,7 @@ tidydraws uses `uv` for managing dependencies. Make sure you have it installed b
    uv run mypy .
    ```
 
-## Testing 
+## Testing
 Run tests with:
 ```bash
 uv run pytest
@@ -120,7 +120,7 @@ This repo ships the [Great Docs Agent Skills](https://posit-dev.github.io/great-
 
 ## Pull Request Guidelines
 
-- Reference relevant issues in your PR description 
+- Reference relevant issues in your PR description
 - Ensure all tests pass
 - Add or update documentation as needed
 - Keep changes focused and atomic

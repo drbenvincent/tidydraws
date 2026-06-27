@@ -31,20 +31,21 @@ beta_np = np.random.normal(1.0, 0.2, (chains, draws, n_groups))
 sigma_np = np.random.normal(0.8, 0.1, (chains, draws))
 
 dt = az.from_dict(
-    {"posterior": {
-        "beta": DataArray(beta_np, dims=["chain", "draw", "groups"]),
-        "sigma": DataArray(sigma_np, dims=["chain", "draw"]),
-    }},
+    {
+        "posterior": {
+            "beta": DataArray(beta_np, dims=["chain", "draw", "groups"]),
+            "sigma": DataArray(sigma_np, dims=["chain", "draw"]),
+        }
+    },
     coords={"groups": [f"g{i}" for i in range(n_groups)]},
     dims={"beta": ["groups"]},
 )
 
 # Manual: stack chain/draw, move groups to rows, build a DataFrame by hand
 da = dt.posterior["beta"]
-manual = (
-    pl.DataFrame(da.values.reshape(-1, n_groups), schema=[f"g{i}" for i in range(n_groups)])
-    .melt(variable_name="groups", value_name="beta")
-)
+manual = pl.DataFrame(
+    da.values.reshape(-1, n_groups), schema=[f"g{i}" for i in range(n_groups)]
+).melt(variable_name="groups", value_name="beta")
 manual.head()
 ```
 
@@ -62,13 +63,12 @@ tidy.head()
 Same data, no manual reshaping — and the frame is ready to plot.
 
 ```{python}
-#| fig-cap: "Posterior density of `beta` by group — tidydraws output, lets-plot rendering."
+# | fig-cap: "Posterior density of `beta` by group — tidydraws output, lets-plot rendering."
 
 (
     ggplot(tidy.to_pandas(), aes(x="beta", fill="groups"))
     + geom_density(alpha=0.5)
-    + labs(x="beta", y="density", fill="group",
-           title="Posterior beta by group")
+    + labs(x="beta", y="density", fill="group", title="Posterior beta by group")
     + theme_minimal()
 )
 ```
@@ -79,13 +79,18 @@ Adding a prior group and comparing is a single `spread_draws_compare()` call —
 
 ```{python}
 prior = az.from_dict(
-    {"posterior": dt.children["posterior"].to_dataset(),
-     "prior": {
-        "beta": DataArray(np.random.normal(0.0, 0.5, (chains, draws, n_groups)),
-                          dims=["chain", "draw", "groups"]),
-        "sigma": DataArray(np.random.normal(1.0, 0.2, (chains, draws)),
-                           dims=["chain", "draw"]),
-     }},
+    {
+        "posterior": dt.children["posterior"].to_dataset(),
+        "prior": {
+            "beta": DataArray(
+                np.random.normal(0.0, 0.5, (chains, draws, n_groups)),
+                dims=["chain", "draw", "groups"],
+            ),
+            "sigma": DataArray(
+                np.random.normal(1.0, 0.2, (chains, draws)), dims=["chain", "draw"]
+            ),
+        },
+    },
     coords={"groups": [f"g{i}" for i in range(n_groups)]},
     dims={"beta": ["groups"]},
 )
@@ -95,14 +100,13 @@ compare.head()
 ```
 
 ```{python}
-#| fig-cap: "Prior vs. posterior of `beta` by group."
+# | fig-cap: "Prior vs. posterior of `beta` by group."
 
 (
     ggplot(compare.to_pandas(), aes(x="beta", fill="source"))
     + geom_density(alpha=0.5)
     + facet_wrap(facets="groups", ncol=2)
-    + labs(x="beta", y="density", fill="source",
-           title="Prior vs. posterior by group")
+    + labs(x="beta", y="density", fill="source", title="Prior vs. posterior by group")
     + theme_minimal()
 )
 ```
@@ -135,21 +139,24 @@ pred_dt = az.from_dict(
             "group": DataArray(group_assignments, dims=["obs_ind"]),
         },
     },
-    coords={"groups": [f"g{i}" for i in range(n_groups)],
-            "obs_ind": list(range(total_obs))},
+    coords={
+        "groups": [f"g{i}" for i in range(n_groups)],
+        "obs_ind": list(range(total_obs)),
+    },
     dims={"beta": ["groups"], "x": ["obs_ind"], "group": ["obs_ind"]},
     pred_dims={"mu": ["obs_ind"]},
 )
 
-pred = td.add_epred_draws(pred_dt, newdata=None, var_name="mu",
-                          constant_data_group="constant_data")
+pred = td.add_epred_draws(
+    pred_dt, newdata=None, var_name="mu", constant_data_group="constant_data"
+)
 pred.head()
 ```
 
 Note the columns: `chain`, `draw`, `obs_ind`, `x`, `group`, `mu`. No `beta`, no `sigma` — parameters stay in their own frame.
 
 ```{python}
-#| fig-cap: "Posterior predictive fit by group — tidydraws prediction frame, lets-plot rendering."
+# | fig-cap: "Posterior predictive fit by group — tidydraws prediction frame, lets-plot rendering."
 
 summary = (
     pred
@@ -166,8 +173,13 @@ summary = (
     ggplot(summary.to_pandas(), aes(x="x"))
     + geom_ribbon(aes(ymin="lower", ymax="upper", fill="factor(group)"), alpha=0.25)
     + geom_line(aes(y="median", color="factor(group)"), size=0.8)
-    + labs(x="x", y="mu", color="group", fill="group",
-           title="Posterior predictive fit by group")
+    + labs(
+        x="x",
+        y="mu",
+        color="group",
+        fill="group",
+        title="Posterior predictive fit by group",
+    )
     + theme_minimal()
 )
 ```

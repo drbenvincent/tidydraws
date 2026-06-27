@@ -57,10 +57,17 @@ dt = az.from_dict(
             "group": DataArray(group_labels, dims=["obs_ind"]),
         },
     },
-    coords={"groups": [f"g{i}" for i in range(n_groups)],
-            "obs_ind": list(range(total_obs))},
-    dims={"intercept": ["groups"], "beta": ["groups"], "sigma": ["groups"],
-          "x": ["obs_ind"], "group": ["obs_ind"]},
+    coords={
+        "groups": [f"g{i}" for i in range(n_groups)],
+        "obs_ind": list(range(total_obs)),
+    },
+    dims={
+        "intercept": ["groups"],
+        "beta": ["groups"],
+        "sigma": ["groups"],
+        "x": ["obs_ind"],
+        "group": ["obs_ind"],
+    },
     pred_dims={"mu": ["obs_ind"]},
 )
 ```
@@ -70,8 +77,9 @@ dt = az.from_dict(
 `add_epred_draws()` left-joins the prediction draws to the constant-data covariates on `obs_ind` (by default). The result is a tidy frame with one row per chain × draw × observation, carrying both the prediction and its covariates.
 
 ```{python}
-pred = td.add_epred_draws(dt, newdata=None, var_name="mu",
-                          constant_data_group="constant_data")
+pred = td.add_epred_draws(
+    dt, newdata=None, var_name="mu", constant_data_group="constant_data"
+)
 pred.head()
 ```
 
@@ -82,7 +90,7 @@ Parameters are **not** included — prediction space is kept separate from param
 Summarise `mu` per observation with Polars quantiles, then plot a ribbon (`geom_ribbon`) and median line (`geom_line`) over `x`.
 
 ```{python}
-#| fig-cap: "Posterior predictive fit with 89% credible ribbon, by group."
+# | fig-cap: "Posterior predictive fit with 89% credible ribbon, by group."
 
 summary = (
     pred
@@ -99,8 +107,13 @@ summary = (
     ggplot(summary.to_pandas(), aes(x="x"))
     + geom_ribbon(aes(ymin="lower", ymax="upper", fill="factor(group)"), alpha=0.25)
     + geom_line(aes(y="median", color="factor(group)"), size=0.8)
-    + labs(x="x", y="mu", color="group", fill="group",
-           title="Posterior predictive fit by group")
+    + labs(
+        x="x",
+        y="mu",
+        color="group",
+        fill="group",
+        title="Posterior predictive fit by group",
+    )
     + theme_minimal()
 )
 ```
@@ -110,13 +123,11 @@ summary = (
 Because `add_epred_draws()` returns an eager `DataFrame`, you can filter **before** plotting — useful when the full prediction space is large.
 
 ```{python}
-#| fig-cap: "Posterior predictive fit for group 0 only."
+# | fig-cap: "Posterior predictive fit for group 0 only."
 
-group0 = (
-    td.add_epred_draws(dt, newdata=None, var_name="mu",
-                       constant_data_group="constant_data")
-    .filter(pl.col("group") == 0)
-)
+group0 = td.add_epred_draws(
+    dt, newdata=None, var_name="mu", constant_data_group="constant_data"
+).filter(pl.col("group") == 0)
 
 g0_summary = (
     group0

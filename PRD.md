@@ -302,7 +302,7 @@ def spread_draws_compare(
     Example
     -------
     # Extract posterior and prior for side-by-side forest plots
-    compare_df = spread_draws_compare(dt, "beta[groups]", 
+    compare_df = spread_draws_compare(dt, "beta[groups]",
                                        groups=["posterior", "prior"])
     # → columns: chain, draw, groups, beta, source
     # → source ∈ {"posterior", "prior"}
@@ -898,5 +898,3 @@ Join only if you genuinely need both:
   spread_draws(...).join(add_epred_draws(...), on=["chain", "draw", "group"])
   → Explicit, and the user understands what they're paying for
 ```
-
- 

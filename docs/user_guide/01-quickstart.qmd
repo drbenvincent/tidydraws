@@ -38,11 +38,13 @@ intercept = np.random.normal(0.0, 0.5, (chains, draws, n_groups))
 sigma = np.random.normal(0.8, 0.1, (chains, draws))
 
 dt = az.from_dict(
-    {"posterior": {
-        "beta": DataArray(beta, dims=["chain", "draw", "groups"]),
-        "intercept": DataArray(intercept, dims=["chain", "draw", "groups"]),
-        "sigma": DataArray(sigma, dims=["chain", "draw"]),
-    }},
+    {
+        "posterior": {
+            "beta": DataArray(beta, dims=["chain", "draw", "groups"]),
+            "intercept": DataArray(intercept, dims=["chain", "draw", "groups"]),
+            "sigma": DataArray(sigma, dims=["chain", "draw"]),
+        }
+    },
     coords={"groups": [f"g{i}" for i in range(n_groups)]},
     dims={"beta": ["groups"], "intercept": ["groups"]},
 )
@@ -64,7 +66,7 @@ The frame is tidy: `chain`, `draw`, `groups`, `beta`, `intercept`. That's all a 
 To make a point-interval plot we summarise the draws per group with Polars, then hand the summary to lets-plot's `geom_pointrange`.
 
 ```{python}
-#| fig-cap: "Posterior estimates of the slope `beta` by group (89% credible interval)."
+# | fig-cap: "Posterior estimates of the slope `beta` by group (89% credible interval)."
 
 summary = (
     beta_draws
@@ -92,15 +94,22 @@ summary = (
 
 ```{python}
 prior = az.from_dict(
-    {"posterior": dt.children["posterior"].to_dataset(),
-     "prior": {
-        "beta": DataArray(np.random.normal(0.0, 0.5, (chains, draws, n_groups)),
-                          dims=["chain", "draw", "groups"]),
-        "intercept": DataArray(np.random.normal(0.0, 0.8, (chains, draws, n_groups)),
-                               dims=["chain", "draw", "groups"]),
-        "sigma": DataArray(np.random.normal(1.0, 0.2, (chains, draws)),
-                           dims=["chain", "draw"]),
-     }},
+    {
+        "posterior": dt.children["posterior"].to_dataset(),
+        "prior": {
+            "beta": DataArray(
+                np.random.normal(0.0, 0.5, (chains, draws, n_groups)),
+                dims=["chain", "draw", "groups"],
+            ),
+            "intercept": DataArray(
+                np.random.normal(0.0, 0.8, (chains, draws, n_groups)),
+                dims=["chain", "draw", "groups"],
+            ),
+            "sigma": DataArray(
+                np.random.normal(1.0, 0.2, (chains, draws)), dims=["chain", "draw"]
+            ),
+        },
+    },
     coords={"groups": [f"g{i}" for i in range(n_groups)]},
     dims={"beta": ["groups"], "intercept": ["groups"]},
 )
@@ -110,14 +119,13 @@ compare.head()
 ```
 
 ```{python}
-#| fig-cap: "Prior vs. posterior distributions of `beta` by group."
+# | fig-cap: "Prior vs. posterior distributions of `beta` by group."
 
 (
     ggplot(compare.to_pandas(), aes(x="beta", fill="source"))
     + geom_density(alpha=0.5)
     + facet_wrap(facets="groups", ncol=2)
-    + labs(x="beta", y="density", fill="source",
-           title="Prior vs. posterior by group")
+    + labs(x="beta", y="density", fill="source", title="Prior vs. posterior by group")
     + theme_minimal()
 )
 ```

@@ -1,0 +1,32 @@
+# Pre-commit hooks run via `prek` (a fast, pre-commit-compatible runner).
+# CI mirrors local behaviour: `uv run prek run --all-files` (pushes) or
+# `uv run prek run --from-ref BASE --to-ref HEAD` (PRs).
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude_types: [svg]
+      - id: end-of-file-fixer
+        exclude_types: [svg]
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ["--maxkb=1500"]
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.12
+    hooks:
+      - id: ruff
+        types_or: [python, pyi, jupyter]
+        args: [--fix]
+      - id: ruff-format
+        types_or: [python, pyi, jupyter, text]
+        files: \.(py|pyi|ipynb|qmd)$
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.15.0
+    hooks:
+      - id: mypy
+        args: [--ignore-missing-imports]
+        files: ^tidydraws/
+        additional_dependencies: [numpy>=1.20, pandas-stubs, polars]

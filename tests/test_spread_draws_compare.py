@@ -21,24 +21,24 @@ def synthetic_dt():
     sigma_data = np.random.randn(2, 5)
     sigma_ds = xr.Dataset(
         {"sigma": (["chain", "draw"], sigma_data)},
-        coords={"chain": chains, "draw": draws}
+        coords={"chain": chains, "draw": draws},
     )
 
     # 2. 1-d array: beta (chain, draw, groups)
     beta_data = np.random.randn(2, 5, 3)
     beta_ds = xr.Dataset(
         {"beta": (["chain", "draw", "groups"], beta_data)},
-        coords={"chain": chains, "draw": draws, "groups": groups}
+        coords={"chain": chains, "draw": draws, "groups": groups},
     )
 
     # 3. 2-d array: gamma (chain, draw, time, group)
     gamma_data = np.random.randn(2, 5, 2, 3)
     gamma_ds = xr.Dataset(
         {"gamma": (["chain", "draw", "time", "group"], gamma_data)},
-        coords={"chain": chains, "draw": draws, "time": times, "group": groups}
+        coords={"chain": chains, "draw": draws, "time": times, "group": groups},
     )
 
-    # We need a single Dataset for the group because spread_draws 
+    # We need a single Dataset for the group because spread_draws
     # does dt.children[group].to_dataset()
     # So we merge them into one dataset for 'posterior'
     posterior = xr.Dataset(
@@ -52,15 +52,15 @@ def synthetic_dt():
             "draw": draws,
             "groups": groups,
             "time": times,
-            "group": groups, # using both 'groups' and 'group' to test dim names
-        }
+            "group": groups,  # using both 'groups' and 'group' to test dim names
+        },
     )
 
     # Create DataTree (available in xarray >= 2024.x / current versions)
     dt = xr.DataTree()
     dt["posterior"] = posterior
-    dt["prior"] = posterior * 0.5 # Simple different data for prior
-    
+    dt["prior"] = posterior * 0.5  # Simple different data for prior
+
     # Add a custom group for testing
     dt["prior_pred"] = posterior * 0.3
 
@@ -71,16 +71,16 @@ def test_spread_draws_compare_basic(synthetic_dt):
     # Test basic functionality with default groups
     lf = spread_draws_compare(synthetic_dt, "beta[groups]")
     df = lf
-    
-    # Should have 2 * 5 * 3 * 2 (chains * draws * groups * groups) rows 
+
+    # Should have 2 * 5 * 3 * 2 (chains * draws * groups * groups) rows
     # since we're comparing posterior and prior
     assert df.height == 2 * 5 * 3 * 2
-    
+
     # Check that we have the source column
     assert "source" in df.columns
     assert set(df.get_column("source").unique().to_list()) == {"posterior", "prior"}
-    
-    # Check that we have the expected columns  
+
+    # Check that we have the expected columns
     assert "chain" in df.columns
     assert "draw" in df.columns
     assert "groups" in df.columns
@@ -89,26 +89,32 @@ def test_spread_draws_compare_basic(synthetic_dt):
 
 def test_spread_draws_compare_custom_groups(synthetic_dt):
     # Test with custom groups including a custom group
-    lf = spread_draws_compare(synthetic_dt, "beta[groups]", groups=["posterior", "prior", "prior_pred"])
+    lf = spread_draws_compare(
+        synthetic_dt, "beta[groups]", groups=["posterior", "prior", "prior_pred"]
+    )
     df = lf
-    
-    # Should have 2 * 5 * 3 * 3 (chains * draws * groups * groups) rows 
+
+    # Should have 2 * 5 * 3 * 3 (chains * draws * groups * groups) rows
     assert df.height == 2 * 5 * 3 * 3
-    
+
     # Check that we have the source column with correct values
     assert "source" in df.columns
-    assert set(df.get_column("source").unique().to_list()) == {"posterior", "prior", "prior_pred"}
-    
+    assert set(df.get_column("source").unique().to_list()) == {
+        "posterior",
+        "prior",
+        "prior_pred",
+    }
+
 
 def test_spread_draws_compare_multiple_vars(synthetic_dt):
     # Test with multiple variables
     lf = spread_draws_compare(synthetic_dt, "beta[groups]", "sigma")
     df = lf
-    
-    # Should have 2 * 5 * 3 * 2 (chains * draws * groups * groups) rows 
+
+    # Should have 2 * 5 * 3 * 2 (chains * draws * groups * groups) rows
     assert df.height == 2 * 5 * 3 * 2
-    
-    # Check that we have the expected columns  
+
+    # Check that we have the expected columns
     assert "chain" in df.columns
     assert "draw" in df.columns
     assert "groups" in df.columns
@@ -121,7 +127,7 @@ def test_spread_draws_compare_custom_group_name(synthetic_dt):
     # Test with custom group column name
     lf = spread_draws_compare(synthetic_dt, "beta[groups]", group_name="model_type")
     df = lf
-    
+
     # Check that we have the custom group column
     assert "model_type" in df.columns
     assert "source" not in df.columns
@@ -152,12 +158,12 @@ def test_spread_draws_compare_numerical_correctness(synthetic_dt):
     # Spot-check data integrity
     lf = spread_draws_compare(synthetic_dt, "beta[groups]")
     df = lf
-    
+
     # Check some values from posterior group
     posterior_rows = df.filter(pl.col("source") == "posterior")
     assert posterior_rows.height > 0
-    
-    # Check that values make sense (non-zero) 
+
+    # Check that values make sense (non-zero)
     beta_values = posterior_rows.get_column("beta")
     assert len(beta_values) > 0
     assert not all(val == 0 for val in beta_values)

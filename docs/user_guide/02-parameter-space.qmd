@@ -32,13 +32,17 @@ gamma = np.random.normal(0.5, 0.15, (chains, draws, n_time, n_groups))
 sigma = np.random.normal(0.8, 0.1, (chains, draws))
 
 dt = az.from_dict(
-    {"posterior": {
-        "beta": DataArray(beta, dims=["chain", "draw", "groups"]),
-        "gamma": DataArray(gamma, dims=["chain", "draw", "time", "groups"]),
-        "sigma": DataArray(sigma, dims=["chain", "draw"]),
-    }},
-    coords={"groups": [f"g{i}" for i in range(n_groups)],
-            "time": [f"t{i}" for i in range(n_time)]},
+    {
+        "posterior": {
+            "beta": DataArray(beta, dims=["chain", "draw", "groups"]),
+            "gamma": DataArray(gamma, dims=["chain", "draw", "time", "groups"]),
+            "sigma": DataArray(sigma, dims=["chain", "draw"]),
+        }
+    },
+    coords={
+        "groups": [f"g{i}" for i in range(n_groups)],
+        "time": [f"t{i}" for i in range(n_time)],
+    },
     dims={"beta": ["groups"], "gamma": ["time", "groups"]},
 )
 ```
@@ -62,13 +66,17 @@ beta_df.head()
 With the tidy frame in hand, a density plot per group is one lets-plot call.
 
 ```{python}
-#| fig-cap: "Posterior density of `beta` by group."
+# | fig-cap: "Posterior density of `beta` by group."
 
 (
     ggplot(beta_df.to_pandas(), aes(x="beta", fill="groups"))
     + geom_density(alpha=0.5)
-    + labs(x="beta", y="density", fill="group",
-           title="Posterior distribution of beta by group")
+    + labs(
+        x="beta",
+        y="density",
+        fill="group",
+        title="Posterior distribution of beta by group",
+    )
     + theme_minimal()
 )
 ```
@@ -85,14 +93,13 @@ mixed.head()
 The scalar `sigma` now appears on every `beta[groups]` row. This lets you plot parameters against each other directly.
 
 ```{python}
-#| fig-cap: "Posterior `beta` by group, coloured by the draw's `sigma`."
+# | fig-cap: "Posterior `beta` by group, coloured by the draw's `sigma`."
 
 (
     ggplot(mixed.to_pandas(), aes(x="groups", y="beta"))
     + geom_jitter(aes(color="sigma"), width=0.15, alpha=0.15, size=0.8)
     + scale_color_gradient(low="steelblue", high="firebrick")
-    + labs(x="group", y="beta", color="sigma",
-           title="beta draws coloured by sigma")
+    + labs(x="group", y="beta", color="sigma", title="beta draws coloured by sigma")
     + theme_minimal()
 )
 ```
@@ -103,17 +110,26 @@ Add a `prior` group to the `DataTree` and `spread_draws_compare()` stacks the tw
 
 ```{python}
 prior = az.from_dict(
-    {"posterior": dt.children["posterior"].to_dataset(),
-     "prior": {
-        "beta": DataArray(np.random.normal(0.0, 0.5, (chains, draws, n_groups)),
-                          dims=["chain", "draw", "groups"]),
-        "gamma": DataArray(np.random.normal(0.3, 0.2, (chains, draws, n_time, n_groups)),
-                           dims=["chain", "draw", "time", "groups"]),
-        "sigma": DataArray(np.random.normal(1.0, 0.2, (chains, draws)),
-                           dims=["chain", "draw"]),
-     }},
-    coords={"groups": [f"g{i}" for i in range(n_groups)],
-            "time": [f"t{i}" for i in range(n_time)]},
+    {
+        "posterior": dt.children["posterior"].to_dataset(),
+        "prior": {
+            "beta": DataArray(
+                np.random.normal(0.0, 0.5, (chains, draws, n_groups)),
+                dims=["chain", "draw", "groups"],
+            ),
+            "gamma": DataArray(
+                np.random.normal(0.3, 0.2, (chains, draws, n_time, n_groups)),
+                dims=["chain", "draw", "time", "groups"],
+            ),
+            "sigma": DataArray(
+                np.random.normal(1.0, 0.2, (chains, draws)), dims=["chain", "draw"]
+            ),
+        },
+    },
+    coords={
+        "groups": [f"g{i}" for i in range(n_groups)],
+        "time": [f"t{i}" for i in range(n_time)],
+    },
     dims={"beta": ["groups"], "gamma": ["time", "groups"]},
 )
 
@@ -122,14 +138,13 @@ compare.head()
 ```
 
 ```{python}
-#| fig-cap: "Prior vs. posterior distributions of `beta` by group."
+# | fig-cap: "Prior vs. posterior distributions of `beta` by group."
 
 (
     ggplot(compare.to_pandas(), aes(x="beta", fill="source"))
     + geom_density(alpha=0.5)
     + facet_wrap(facets="groups", ncol=2)
-    + labs(x="beta", y="density", fill="source",
-           title="Prior vs. posterior by group")
+    + labs(x="beta", y="density", fill="source", title="Prior vs. posterior by group")
     + theme_minimal()
 )
 ```
@@ -139,10 +154,11 @@ compare.head()
 Summarise the draws per group with Polars quantiles, then plot with `geom_pointrange`.
 
 ```{python}
-#| fig-cap: "Forest plot of `beta` by group (89% credible interval)."
+# | fig-cap: "Forest plot of `beta` by group (89% credible interval)."
 
 summary = (
-    td.spread_draws(dt, "beta[groups]")
+    td
+    .spread_draws(dt, "beta[groups]")
     .group_by("groups")
     .agg(
         pl.col("beta").quantile(0.055).alias("lower"),

@@ -66,10 +66,17 @@ dt = az.from_dict(
             "y": DataArray(y_vals, dims=["obs_ind"]),
         },
     },
-    coords={"groups": [f"g{i}" for i in range(n_groups)],
-            "obs_ind": list(range(total_obs))},
-    dims={"intercept": ["groups"], "beta": ["groups"],
-          "x": ["obs_ind"], "group": ["obs_ind"], "y": ["obs_ind"]},
+    coords={
+        "groups": [f"g{i}" for i in range(n_groups)],
+        "obs_ind": list(range(total_obs)),
+    },
+    dims={
+        "intercept": ["groups"],
+        "beta": ["groups"],
+        "x": ["obs_ind"],
+        "group": ["obs_ind"],
+        "y": ["obs_ind"],
+    },
     pred_dims={"mu": ["obs_ind"]},
 )
 ```
@@ -84,10 +91,11 @@ params.head()
 ```
 
 ```{python}
-#| fig-cap: "Posterior forest plot of `beta` and `intercept` by group (89% CrI)."
+# | fig-cap: "Posterior forest plot of `beta` and `intercept` by group (89% CrI)."
 
 beta_summary = (
-    params.group_by("groups")
+    params
+    .group_by("groups")
     .agg(
         pl.col("beta").quantile(0.055).alias("lower"),
         pl.col("beta").median().alias("median"),
@@ -97,7 +105,8 @@ beta_summary = (
     .with_columns(pl.lit("beta").alias("param"))
 )
 intercept_summary = (
-    params.group_by("groups")
+    params
+    .group_by("groups")
     .agg(
         pl.col("intercept").quantile(0.055).alias("lower"),
         pl.col("intercept").median().alias("median"),
@@ -112,8 +121,12 @@ forest = pl.concat([beta_summary, intercept_summary], how="diagonal")
     ggplot(forest.to_pandas(), aes(x="median", y="groups", color="param"))
     + geom_pointrange(aes(xmin="lower", xmax="upper"), size=0.7)
     + geom_vline(xintercept=0, linetype="dashed", color="#888888")
-    + labs(x="estimate", y="group", color="parameter",
-           title="Posterior estimates by group (89% CrI)")
+    + labs(
+        x="estimate",
+        y="group",
+        color="parameter",
+        title="Posterior estimates by group (89% CrI)",
+    )
     + theme_minimal()
 )
 ```
@@ -148,10 +161,17 @@ dt_with_prior = az.from_dict(
             "y": DataArray(y_vals, dims=["obs_ind"]),
         },
     },
-    coords={"groups": [f"g{i}" for i in range(n_groups)],
-            "obs_ind": list(range(total_obs))},
-    dims={"intercept": ["groups"], "beta": ["groups"],
-          "x": ["obs_ind"], "group": ["obs_ind"], "y": ["obs_ind"]},
+    coords={
+        "groups": [f"g{i}" for i in range(n_groups)],
+        "obs_ind": list(range(total_obs)),
+    },
+    dims={
+        "intercept": ["groups"],
+        "beta": ["groups"],
+        "x": ["obs_ind"],
+        "group": ["obs_ind"],
+        "y": ["obs_ind"],
+    },
     pred_dims={"mu": ["obs_ind"]},
 )
 
@@ -159,14 +179,13 @@ compare = td.spread_draws_compare(dt_with_prior, "beta[groups]")
 ```
 
 ```{python}
-#| fig-cap: "Prior vs. posterior distributions of `beta` by group."
+# | fig-cap: "Prior vs. posterior distributions of `beta` by group."
 
 (
     ggplot(compare.to_pandas(), aes(x="beta", fill="source"))
     + geom_density(alpha=0.5)
     + facet_wrap(facets="groups", ncol=2)
-    + labs(x="beta", y="density", fill="source",
-           title="Prior vs. posterior by group")
+    + labs(x="beta", y="density", fill="source", title="Prior vs. posterior by group")
     + theme_minimal()
 )
 ```
@@ -176,13 +195,14 @@ compare = td.spread_draws_compare(dt_with_prior, "beta[groups]")
 Join `mu` draws to the covariates with `add_epred_draws()`, summarise, and plot a ribbon + median line, with the observed data overlaid.
 
 ```{python}
-pred = td.add_epred_draws(dt_with_prior, newdata=None, var_name="mu",
-                          constant_data_group="constant_data")
+pred = td.add_epred_draws(
+    dt_with_prior, newdata=None, var_name="mu", constant_data_group="constant_data"
+)
 pred.head()
 ```
 
 ```{python}
-#| fig-cap: "Posterior predictive fit with 89% credible ribbon and observed data, by group."
+# | fig-cap: "Posterior predictive fit with 89% credible ribbon and observed data, by group."
 
 summary = (
     pred
@@ -201,10 +221,19 @@ observed = summary.select("x", "y", "group").unique()
     ggplot(summary.to_pandas(), aes(x="x"))
     + geom_ribbon(aes(ymin="lower", ymax="upper", fill="factor(group)"), alpha=0.2)
     + geom_line(aes(y="median", color="factor(group)"), size=0.8)
-    + geom_point(data=observed.to_pandas(),
-                 mapping=aes(y="y", color="factor(group)"), size=1.2, alpha=0.6)
-    + labs(x="x", y="mu / y", color="group", fill="group",
-           title="Posterior predictive fit with observed data")
+    + geom_point(
+        data=observed.to_pandas(),
+        mapping=aes(y="y", color="factor(group)"),
+        size=1.2,
+        alpha=0.6,
+    )
+    + labs(
+        x="x",
+        y="mu / y",
+        color="group",
+        fill="group",
+        title="Posterior predictive fit with observed data",
+    )
     + theme_minimal()
 )
 ```
