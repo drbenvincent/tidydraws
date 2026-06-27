@@ -1,6 +1,6 @@
 [project]
 name = "tidydraws"
-version = "0.1.0a0"
+version = "0.1.0"
 description = "A tidybayes-inspired data layer for declarative Bayesian visualisation in Python"
 readme = "README.md"
 license = { text = "MIT" }
