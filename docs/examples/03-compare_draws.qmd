@@ -1,10 +1,10 @@
 ---
 title: "Comparing groups"
-description: "Stack prior and posterior draws with spread_draws_compare()"
+description: "Stack prior and posterior draws with compare_draws()"
 status: stable
 ---
 
-`spread_draws_compare()` calls `spread_draws()` once per group (default `["posterior", "prior"]`), tags each with a `source` column, and stacks them into a single `DataFrame`. The result is the tidy input for any comparison plot — no manual concatenation.
+`compare_draws()` calls `parameter_draws()` once per group (default `["posterior", "prior"]`), tags each with a `source` column, and stacks them into a single `DataFrame`. The result is the tidy input for any comparison plot — no manual concatenation.
 
 ## Setup
 
@@ -17,7 +17,18 @@ import polars as pl
 import arviz as az
 import tidydraws as td
 from xarray import DataArray
-from lets_plot import *
+from lets_plot import (
+    LetsPlot,
+    aes,
+    facet_wrap,
+    geom_density,
+    geom_hline,
+    geom_pointrange,
+    ggplot,
+    labs,
+    position_dodge,
+    theme_minimal,
+)
 LetsPlot.setup_html()
 
 np.random.seed(11)
@@ -46,7 +57,7 @@ dt = az.from_dict(
 One call stacks both sources:
 
 ```{python}
-compare = td.spread_draws_compare(dt, "beta[groups]")
+compare = td.compare_draws(dt, "beta[groups]")
 compare.head()
 ```
 
@@ -110,4 +121,4 @@ ci = (
 
 `group_name` sets the source column's name, and `groups` accepts any pair of
 `DataTree` groups — not just prior/posterior. See
-[`spread_draws()`](spread_draws.qmd) for the underlying extraction.
+[`parameter_draws()`](parameter_draws.qmd) for the underlying extraction.

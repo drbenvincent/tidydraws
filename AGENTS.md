@@ -8,11 +8,12 @@ tidydraws is a tidybayes-inspired data layer for Bayesian visualisation in Pytho
 
 ## Hard Rules (never violate)
 
-1. **Always return `pl.DataFrame`** from `spread_draws()`, `add_epred_draws()`, and `spread_draws_compare()` — eager, never `pl.LazyFrame`. The data is already materialised during the xarray→pandas conversion, so wrapping it lazy would be dishonest about cost and force every plotting call through a needless `.collect()`.
+1. **Always return `pl.DataFrame`** from `parameter_draws()`, `prediction_draws()`, and `compare_draws()` — eager, never `pl.LazyFrame`. The data is already materialised during the xarray→pandas conversion, so wrapping it lazy would be dishonest about cost and force every plotting call through a needless `.collect()`.
 2. **String var specs only:** `"beta[groups, time]"` → `("beta", ["groups", "time"])`. No kwargs API.
-3. **Fail loudly on missing data.** If `add_epred_draws(newdata=None)` can't find the constant data group, raise a clear, actionable error.
+3. **Fail loudly on missing data.** If `prediction_draws(newdata=None)` can't find the constant data group, raise a clear, actionable error.
 4. **Support any group** (posterior, prior, custom) from day 1.
-5. **Row counts are the primary test.** `spread_draws(dt, "beta[groups]")` must return exactly `chains × draws × groups` rows, no duplication.
+5. **Row counts are the primary test.** `parameter_draws(dt, "beta[groups]")` must return exactly `chains × draws × groups` rows, no duplication.
+6. **No star imports in docs or examples.** Import the exact plotting functions used (for example, `from lets_plot import ggplot, aes, geom_line`) so rendered examples keep an explicit namespace contract.
 
 ---
 
@@ -27,7 +28,7 @@ uv sync
 # Run a command inside the project environment
 uv run python script.py
 uv run pytest
-uv run pytest tests/test_spread_draws.py
+uv run pytest tests/test_parameter_draws.py
 
 # Add a dependency (updates pyproject.toml + uv.lock)
 uv add polars
@@ -46,7 +47,7 @@ Key point: prefix Python/pytest commands with `uv run` so they use the project's
 - **Eager `pl.DataFrame`, not LazyFrame.** The extraction path is `xarray.DataArray.to_dataframe()` (pandas, eager) → `pl.from_pandas()`; the data is fully in memory before any Polars object exists. A `LazyFrame` wrapper would buy nothing — predicate pushdown and streaming only help when the *source* is lazy (e.g. `scan_parquet`), which it isn't here — and would tax every plotting call with a `.collect()` step plus a `.to_pandas()` hop the backends require anyway. Eager frames are honest about the cost and a one-hop `.to_pandas()` from lets-plot/plotnine.
 - **Fail loudly** on missing data to avoid silent misalignment bugs; give the user explicit guidance.
 - **Cross-dim joins auto-join with a logged warning** (e.g. scalar `sigma` broadcast across `beta[groups]`) — common case "just works", transparently.
-- **`spread_draws_compare()` ships in v0.1** because prior vs. posterior comparison is fundamental.
+- **`compare_draws()` ships in v0.1** because prior vs. posterior comparison is fundamental.
 - **ArviZ 1.0 DataTree only** — greenfield, no legacy `InferenceData` debt. Access groups via `.children[group].to_dataset()`.
 - **Polars over pandas** for faster joins and a consistent tidy-frame type across the API surface.
 
@@ -55,12 +56,12 @@ Key point: prefix Python/pytest commands with `uv run` so they use the project's
 ### Key signatures
 
 ```python
-def spread_draws(
+def parameter_draws(
     dt, *var_specs, group="posterior", chain_dim="chain", draw_dim="draw"
 ) -> pl.DataFrame: ...
 
 
-def add_epred_draws(
+def prediction_draws(
     dt,
     newdata,
     var_name,
@@ -70,7 +71,7 @@ def add_epred_draws(
 ) -> pl.DataFrame: ...
 
 
-def spread_draws_compare(
+def compare_draws(
     dt, *var_specs, groups=["posterior", "prior"], group_name="source"
 ) -> pl.DataFrame: ...
 ```

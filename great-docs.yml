@@ -34,9 +34,9 @@ reference:
   - title: Functions
     desc: Extract and join tidy draws from ArviZ DataTrees.
     contents:
-      - spread_draws
-      - add_epred_draws
-      - spread_draws_compare
+      - parameter_draws
+      - prediction_draws
+      - compare_draws
 
 # Appearance ------------------------------------------------------------------
 navbar_style: mint

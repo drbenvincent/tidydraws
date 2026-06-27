@@ -1,10 +1,10 @@
 ---
 title: "Prediction space"
-description: "Join prediction draws to covariates with add_epred_draws()"
+description: "Join prediction draws to covariates with prediction_draws()"
 status: stable
 ---
 
-`add_epred_draws()` joins posterior-predictive draws (e.g. `mu`) to a covariate grid, producing one tidy row per `chain × draw × observation`. Parameters are deliberately **excluded** — prediction space stays separate from parameter space, so coefficients never get duplicated across observations.
+`prediction_draws()` joins posterior-predictive draws (e.g. `mu`) to a covariate grid, producing one tidy row per `chain × draw × observation`. Parameters are deliberately **excluded** — prediction space stays separate from parameter space, so coefficients never get duplicated across observations.
 
 With `newdata=None` it reads covariates straight from a constant-data group in the `DataTree`; pass a `DataFrame` to use a custom grid. It fails loudly if that group is missing. The result is an eager `DataFrame`, so call `.filter()` to subset before plotting.
 
@@ -19,7 +19,17 @@ import polars as pl
 import arviz as az
 import tidydraws as td
 from xarray import DataArray
-from lets_plot import *
+from lets_plot import (
+    LetsPlot,
+    aes,
+    as_discrete,
+    geom_line,
+    geom_point,
+    geom_ribbon,
+    ggplot,
+    labs,
+    theme_minimal,
+)
 LetsPlot.setup_html()
 
 np.random.seed(42)
@@ -66,7 +76,7 @@ dt = az.from_dict(
 One call joins `mu` to `x`, `group`, and `y`:
 
 ```{python}
-pred = td.add_epred_draws(
+pred = td.prediction_draws(
     dt, newdata=None, var_name="mu", constant_data_group="constant_data"
 )
 pred.head()
@@ -131,7 +141,7 @@ Because the result is an eager `DataFrame`, subset with `.filter()` before summa
 
 ```{python}
 #| fig-cap: "Posterior predictive fit for group 0, with observed data."
-g0 = td.add_epred_draws(
+g0 = td.prediction_draws(
     dt, newdata=None, var_name="mu", constant_data_group="constant_data"
 ).filter(pl.col("group") == 0)
 
@@ -155,5 +165,5 @@ s0 = (
 )
 ```
 
-See [`spread_draws()`](spread_draws.qmd) for parameter space, or
-[`spread_draws_compare()`](spread_draws_compare.qmd) for prior vs posterior.
+See [`parameter_draws()`](parameter_draws.qmd) for parameter space, or
+[`compare_draws()`](compare_draws.qmd) for prior vs posterior.

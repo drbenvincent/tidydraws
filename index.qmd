@@ -1,14 +1,14 @@
-## tidydraws
+# tidydraws
 
-> A tidybayes-inspired data layer for declarative Bayesian visualisation in Python.
+A tidybayes-inspired data layer for declarative Bayesian visualisation in Python.
 
 `tidydraws` turns MCMC output (ArviZ `DataTree`) into tidy Polars frames that are ready to plot — one `.to_pandas()` away from any ggplot-like backend. It does no plotting itself. Three functions, three spaces:
 
 | Function | Space | Plot archetype |
 | --- | --- | --- |
-| [`spread_draws()`](docs/examples/spread_draws.qmd) | parameter | density, forest, scatter |
-| [`add_epred_draws()`](docs/examples/add_epred_draws.qmd) | prediction | ribbon + line, fit + data |
-| [`spread_draws_compare()`](docs/examples/spread_draws_compare.qmd) | comparison | prior vs posterior, intervals |
+| [`parameter_draws()`](docs/examples/parameter_draws.qmd) | parameter | density, forest, scatter |
+| [`prediction_draws()`](docs/examples/prediction_draws.qmd) | prediction | ribbon + line, fit + data |
+| [`compare_draws()`](docs/examples/compare_draws.qmd) | comparison | prior vs posterior, intervals |
 
 ```{python}
 #| code-fold: true
@@ -17,7 +17,21 @@ import polars as pl
 import arviz as az
 import tidydraws as td
 from xarray import DataArray
-from lets_plot import *
+from lets_plot import (
+    LetsPlot,
+    aes,
+    as_discrete,
+    facet_wrap,
+    geom_density,
+    geom_hline,
+    geom_line,
+    geom_pointrange,
+    geom_ribbon,
+    gggrid,
+    ggplot,
+    labs,
+    theme_minimal,
+)
 LetsPlot.setup_html()
 
 np.random.seed(42)
@@ -59,7 +73,7 @@ dt = az.from_dict(
     pred_dims={"mu": ["obs_ind"]},
 )
 
-beta_df = td.spread_draws(dt, "beta[groups]")
+beta_df = td.parameter_draws(dt, "beta[groups]")
 beta_summary = (
     beta_df.group_by("groups")
     .agg(
@@ -69,8 +83,8 @@ beta_summary = (
     )
     .sort("groups")
 )
-compare = td.spread_draws_compare(dt, "beta[groups]")
-pred = td.add_epred_draws(dt, newdata=None, var_name="mu",
+compare = td.compare_draws(dt, "beta[groups]")
+pred = td.prediction_draws(dt, newdata=None, var_name="mu",
                           constant_data_group="constant_data")
 pred_summary = (
     pred.group_by("obs_ind", "x", "group")
@@ -114,31 +128,31 @@ gggrid([p_forest, p_density, p_compare, p_pred], ncol=2)
 ```
 
 
-### Install
+## Install
 
+ With uv
 ```bash
-uv add tidydraws              # core data layer only
-uv add "tidydraws[letsplot]"  # with lets-plot
-uv add "tidydraws[plotnine]"  # with plotnine
+uv add tidydraws
 ```
 
-### Why tidydraws?
+With pip
+```bash
+pip install tidydraws
+```
+
+## Why tidydraws?
 
 Plotting MCMC output in Python means manually slicing xarray dimensions, iterating groups, and aligning coordinates — imperative, verbose, error-prone. R's [`tidybayes`](https://github.com/TuringLang/tidybayes) solved this with a data layer that respects parameter space vs prediction space. `tidydraws` brings that to Python on Polars.
 
 | Task | ArviZ (manual) | tidydraws |
 | --- | --- | --- |
-| Extract `beta[groups]` | `dt.posterior["beta"].values` + reshape | `spread_draws(dt, "beta[groups]")` |
-| Compare prior / posterior | concat two arrays by hand | `spread_draws_compare(dt, "beta[groups]")` |
-| Join predictions to covariates | manual merge on obs index | `add_epred_draws(dt, var_name="mu")` |
+| Extract `beta[groups]` | `dt.posterior["beta"].values` + reshape | `parameter_draws(dt, "beta[groups]")` |
+| Compare prior / posterior | concat two arrays by hand | `compare_draws(dt, "beta[groups]")` |
+| Join predictions to covariates | manual merge on obs index | `prediction_draws(dt, var_name="mu")` |
 | Subset before plotting | slice after materialising | `.filter(...)` on the returned frame |
 
 ::: {.callout-note}
-`tidydraws` is plotting-backend-agnostic: it returns Polars `DataFrame`s, and
-`.to_pandas()` bridges to lets-plot, plotnine, or any library that takes
-pandas. The examples use [lets-plot](https://lets-plot.org/); see the
-[`spread_draws()`](docs/examples/spread_draws.qmd) page for the same plot in
-plotnine.
+`tidydraws` is plotting-backend-agnostic: it returns Polars `DataFrame`s, and `.to_pandas()` bridges to lets-plot, plotnine, or any library that takes pandas. The examples use [lets-plot](https://lets-plot.org/); see the [`parameter_draws()`](docs/examples/parameter_draws.qmd) page for the same plot in plotnine.
 :::
 
 ---

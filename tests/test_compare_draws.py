@@ -2,7 +2,7 @@ import pytest
 import polars as pl
 import xarray as xr
 import numpy as np
-from tidydraws import spread_draws_compare
+from tidydraws import compare_draws
 
 
 @pytest.fixture
@@ -38,7 +38,7 @@ def synthetic_dt():
         coords={"chain": chains, "draw": draws, "time": times, "group": groups},
     )
 
-    # We need a single Dataset for the group because spread_draws
+    # We need a single Dataset for the group because parameter_draws
     # does dt.children[group].to_dataset()
     # So we merge them into one dataset for 'posterior'
     posterior = xr.Dataset(
@@ -67,9 +67,9 @@ def synthetic_dt():
     return dt
 
 
-def test_spread_draws_compare_basic(synthetic_dt):
+def test_compare_draws_basic(synthetic_dt):
     # Test basic functionality with default groups
-    lf = spread_draws_compare(synthetic_dt, "beta[groups]")
+    lf = compare_draws(synthetic_dt, "beta[groups]")
     df = lf
 
     # Should have 2 * 5 * 3 * 2 (chains * draws * groups * groups) rows
@@ -87,9 +87,9 @@ def test_spread_draws_compare_basic(synthetic_dt):
     assert "beta" in df.columns
 
 
-def test_spread_draws_compare_custom_groups(synthetic_dt):
+def test_compare_draws_custom_groups(synthetic_dt):
     # Test with custom groups including a custom group
-    lf = spread_draws_compare(
+    lf = compare_draws(
         synthetic_dt, "beta[groups]", groups=["posterior", "prior", "prior_pred"]
     )
     df = lf
@@ -106,9 +106,9 @@ def test_spread_draws_compare_custom_groups(synthetic_dt):
     }
 
 
-def test_spread_draws_compare_multiple_vars(synthetic_dt):
+def test_compare_draws_multiple_vars(synthetic_dt):
     # Test with multiple variables
-    lf = spread_draws_compare(synthetic_dt, "beta[groups]", "sigma")
+    lf = compare_draws(synthetic_dt, "beta[groups]", "sigma")
     df = lf
 
     # Should have 2 * 5 * 3 * 2 (chains * draws * groups * groups) rows
@@ -123,9 +123,9 @@ def test_spread_draws_compare_multiple_vars(synthetic_dt):
     assert "source" in df.columns
 
 
-def test_spread_draws_compare_custom_group_name(synthetic_dt):
+def test_compare_draws_custom_group_name(synthetic_dt):
     # Test with custom group column name
-    lf = spread_draws_compare(synthetic_dt, "beta[groups]", group_name="model_type")
+    lf = compare_draws(synthetic_dt, "beta[groups]", group_name="model_type")
     df = lf
 
     # Check that we have the custom group column
@@ -133,30 +133,30 @@ def test_spread_draws_compare_custom_group_name(synthetic_dt):
     assert "source" not in df.columns
 
 
-def test_spread_draws_compare_eager_semantics(synthetic_dt):
+def test_compare_draws_eager_semantics(synthetic_dt):
     # Verify return type is pl.DataFrame (eager)
-    df = spread_draws_compare(synthetic_dt, "beta[groups]")
+    df = compare_draws(synthetic_dt, "beta[groups]")
     assert isinstance(df, pl.DataFrame)
 
     # Eager frames expose .height directly
     assert df.height > 0
 
 
-def test_spread_draws_compare_error_invalid_group(synthetic_dt):
+def test_compare_draws_error_invalid_group(synthetic_dt):
     # Test error handling for non-existent group
     with pytest.raises(KeyError, match="Group 'nonexistent' not found"):
-        spread_draws_compare(synthetic_dt, "sigma", groups=["nonexistent"])
+        compare_draws(synthetic_dt, "sigma", groups=["nonexistent"])
 
 
-def test_spread_draws_compare_error_malformed_spec(synthetic_dt):
-    # Test error handling for malformed spec (should be passed through from spread_draws)
+def test_compare_draws_error_malformed_spec(synthetic_dt):
+    # Test error handling for malformed spec (should be passed through from parameter_draws)
     with pytest.raises(ValueError, match="Malformed variable specification"):
-        spread_draws_compare(synthetic_dt, "beta[groups")
+        compare_draws(synthetic_dt, "beta[groups")
 
 
-def test_spread_draws_compare_numerical_correctness(synthetic_dt):
+def test_compare_draws_numerical_correctness(synthetic_dt):
     # Spot-check data integrity
-    lf = spread_draws_compare(synthetic_dt, "beta[groups]")
+    lf = compare_draws(synthetic_dt, "beta[groups]")
     df = lf
 
     # Check some values from posterior group

@@ -3,13 +3,13 @@ import polars as pl
 import xarray as xr
 import numpy as np
 import pandas as pd
-from tidydraws import add_epred_draws
+from tidydraws import prediction_draws
 
 
 @pytest.fixture
 def synthetic_dt_with_predictions():
     """
-    Construct a minimal xarray.DataTree for testing add_epred_draws().
+    Construct a minimal xarray.DataTree for testing prediction_draws().
     Includes:
     - predictions group: (chain=2, draw=5, obs_ind=20)
     - predictions_constant_data group: (obs_ind=20, covariates: x, group)
@@ -51,7 +51,7 @@ def test_join_correctness(synthetic_dt_with_predictions):
     dt = synthetic_dt_with_predictions
 
     # Test basic join with newdata=None (should read from constant data group)
-    result = add_epred_draws(dt, newdata=None, var_name="mu")
+    result = prediction_draws(dt, newdata=None, var_name="mu")
 
     # Row count: chain × draw × obs_ind = 2 × 5 × 20 = 200 rows
     assert result.height == 2 * 5 * 20 == 200
@@ -74,11 +74,11 @@ def test_constant_data_group_handling(synthetic_dt_with_predictions):
     dt = synthetic_dt_with_predictions
 
     # Test default group name auto-read
-    result1 = add_epred_draws(dt, newdata=None, var_name="mu")
+    result1 = prediction_draws(dt, newdata=None, var_name="mu")
     assert result1.height == 200
 
     # Test explicit group parameter
-    result2 = add_epred_draws(
+    result2 = prediction_draws(
         dt, newdata=None, var_name="mu", constant_data_group="predictions_constant_data"
     )
     assert result2.height == 200
@@ -87,7 +87,7 @@ def test_constant_data_group_handling(synthetic_dt_with_predictions):
     dt_no_const = xr.DataTree()
     dt_no_const["predictions"] = dt["predictions"].to_dataset()
     with pytest.raises(KeyError, match="constant_data_group.*not found"):
-        add_epred_draws(dt_no_const, newdata=None, var_name="mu")
+        prediction_draws(dt_no_const, newdata=None, var_name="mu")
 
 
 def test_newdata_parameter(synthetic_dt_with_predictions):
@@ -100,11 +100,11 @@ def test_newdata_parameter(synthetic_dt_with_predictions):
         "x": np.random.randn(20),
         "group": np.random.choice([0, 1, 2], 20),
     })
-    result_pd = add_epred_draws(dt, newdata=newdata_pd, var_name="mu")
+    result_pd = prediction_draws(dt, newdata=newdata_pd, var_name="mu")
     assert result_pd.height == 200
 
     # Test with newdata=None when group is present (should work)
-    result_none = add_epred_draws(dt, newdata=None, var_name="mu")
+    result_none = prediction_draws(dt, newdata=None, var_name="mu")
     assert result_none.height == 200
 
     # Test that we get expected columns back
@@ -126,14 +126,14 @@ def test_newdata_missing_group_error(synthetic_dt_with_predictions):
     assert "predictions_constant_data" not in dt_no_const.children
 
     with pytest.raises(KeyError, match="constant_data_group.*not found"):
-        add_epred_draws(dt_no_const, newdata=None, var_name="mu")
+        prediction_draws(dt_no_const, newdata=None, var_name="mu")
 
 
 def test_eager_semantics(synthetic_dt_with_predictions):
     """Test that return type is DataFrame (eager) and filtering works."""
     dt = synthetic_dt_with_predictions
 
-    result = add_epred_draws(dt, newdata=None, var_name="mu")
+    result = prediction_draws(dt, newdata=None, var_name="mu")
 
     # Test return type is pl.DataFrame (eager)
     assert isinstance(result, pl.DataFrame)
@@ -148,7 +148,7 @@ def test_no_parameter_duplication(synthetic_dt_with_predictions):
     """Test that there's no parameter duplication in the result."""
     dt = synthetic_dt_with_predictions
 
-    result = add_epred_draws(dt, newdata=None, var_name="mu")
+    result = prediction_draws(dt, newdata=None, var_name="mu")
 
     df = result
 
@@ -163,7 +163,7 @@ def test_error_on_missing_variable(synthetic_dt_with_predictions):
     dt = synthetic_dt_with_predictions
 
     with pytest.raises(KeyError, match="Variable.*not found"):
-        add_epred_draws(dt, newdata=None, var_name="nonexistent")
+        prediction_draws(dt, newdata=None, var_name="nonexistent")
 
 
 def test_error_on_missing_group(synthetic_dt_with_predictions):
@@ -178,4 +178,4 @@ def test_error_on_missing_group(synthetic_dt_with_predictions):
     assert "predictions" not in dt_no_pred.children
 
     with pytest.raises(KeyError, match="Group.*not found"):
-        add_epred_draws(dt_no_pred, newdata=None, var_name="mu")
+        prediction_draws(dt_no_pred, newdata=None, var_name="mu")

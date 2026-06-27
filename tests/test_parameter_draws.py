@@ -2,7 +2,7 @@ import pytest
 import polars as pl
 import xarray as xr
 import numpy as np
-from tidydraws import spread_draws
+from tidydraws import parameter_draws
 
 
 @pytest.fixture
@@ -38,7 +38,7 @@ def synthetic_dt():
         coords={"chain": chains, "draw": draws, "time": times, "group": groups},
     )
 
-    # We need a single Dataset for the group because spread_draws
+    # We need a single Dataset for the group because parameter_draws
     # does dt.children[group].to_dataset()
     # So we merge them into one dataset for 'posterior'
     posterior = xr.Dataset(
@@ -66,35 +66,35 @@ def synthetic_dt():
 
 def test_row_count_scalar(synthetic_dt):
     # Scalar only: chain=2, draw=5 -> 10 rows
-    lf = spread_draws(synthetic_dt, "sigma", group="posterior")
+    lf = parameter_draws(synthetic_dt, "sigma", group="posterior")
     df = lf
     assert df.height == 2 * 5
 
 
 def test_row_count_1d(synthetic_dt):
     # 1-d array: chain=2, draw=5, groups=3 -> 30 rows
-    lf = spread_draws(synthetic_dt, "beta[groups]", group="posterior")
+    lf = parameter_draws(synthetic_dt, "beta[groups]", group="posterior")
     df = lf
     assert df.height == 2 * 5 * 3
 
 
 def test_row_count_2d(synthetic_dt):
     # 2-d array: chain=2, draw=5, time=2, group=3 -> 60 rows
-    lf = spread_draws(synthetic_dt, "gamma[time, group]", group="posterior")
+    lf = parameter_draws(synthetic_dt, "gamma[time, group]", group="posterior")
     df = lf
     assert df.height == 2 * 5 * 2 * 3
 
 
 def test_row_count_cross_dim(synthetic_dt):
     # Cross-dim (scalar + 1-d): beta[groups] is the driver -> 30 rows
-    lf = spread_draws(synthetic_dt, "beta[groups]", "sigma", group="posterior")
+    lf = parameter_draws(synthetic_dt, "beta[groups]", "sigma", group="posterior")
     df = lf
     assert df.height == 2 * 5 * 3
 
 
 def test_eager_semantics(synthetic_dt):
     # Verify return type is pl.DataFrame (eager)
-    df = spread_draws(synthetic_dt, "sigma", group="posterior")
+    df = parameter_draws(synthetic_dt, "sigma", group="posterior")
     assert isinstance(df, pl.DataFrame)
 
     # Eager frames expose .height directly
@@ -103,7 +103,7 @@ def test_eager_semantics(synthetic_dt):
 
 def test_filtering(synthetic_dt):
     # Test filtering on an eager DataFrame
-    df = spread_draws(synthetic_dt, "beta[groups]", group="posterior")
+    df = parameter_draws(synthetic_dt, "beta[groups]", group="posterior")
     # Filter for groups == 0 (should be 2 * 5 * 1 = 10 rows)
     filtered = df.filter(pl.col("groups") == 0)
     assert filtered.height == 10
@@ -111,33 +111,33 @@ def test_filtering(synthetic_dt):
 
 def test_error_invalid_group(synthetic_dt):
     with pytest.raises(KeyError, match="Group 'nonexistent' not found"):
-        spread_draws(synthetic_dt, "sigma", group="nonexistent")
+        parameter_draws(synthetic_dt, "sigma", group="nonexistent")
 
 
 def test_error_malformed_spec(synthetic_dt):
     # Unmatched brackets
     with pytest.raises(ValueError, match="Malformed variable specification"):
-        spread_draws(synthetic_dt, "beta[groups")
+        parameter_draws(synthetic_dt, "beta[groups")
 
     # Empty brackets
     with pytest.raises(ValueError, match="cannot have empty brackets"):
-        spread_draws(synthetic_dt, "beta[]")
+        parameter_draws(synthetic_dt, "beta[]")
 
 
 def test_error_variable_not_found(synthetic_dt):
     with pytest.raises(KeyError, match="Variable 'missing' not found"):
-        spread_draws(synthetic_dt, "missing[groups]", group="posterior")
+        parameter_draws(synthetic_dt, "missing[groups]", group="posterior")
 
 
 def test_error_dimension_mismatch(synthetic_dt):
     # beta has [groups], but we specify [time]
     with pytest.raises(ValueError, match="Dimension mismatch for 'beta'"):
-        spread_draws(synthetic_dt, "beta[time]", group="posterior")
+        parameter_draws(synthetic_dt, "beta[time]", group="posterior")
 
 
 def test_numerical_correctness(synthetic_dt):
     # Spot-check one value from beta
-    lf = spread_draws(synthetic_dt, "beta[groups]", group="posterior")
+    lf = parameter_draws(synthetic_dt, "beta[groups]", group="posterior")
     df = lf
 
     # Find row for chain=0, draw=0, groups=0
@@ -152,7 +152,7 @@ def test_numerical_correctness(synthetic_dt):
 
 def test_numerical_correctness_2d(synthetic_dt):
     # Spot-check one value from gamma (chain, draw, time, group)
-    lf = spread_draws(synthetic_dt, "gamma[time, group]", group="posterior")
+    lf = parameter_draws(synthetic_dt, "gamma[time, group]", group="posterior")
     df = lf
 
     # Find row for chain=0, draw=0, time=1, group=2

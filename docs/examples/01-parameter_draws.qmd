@@ -1,10 +1,10 @@
 ---
 title: "Parameter space"
-description: "Extract posterior draws with spread_draws() and plot them"
+description: "Extract posterior draws with parameter_draws() and plot them"
 status: stable
 ---
 
-`spread_draws()` is the entry point: it pulls posterior draws out of an ArviZ `DataTree` into a tidy Polars `DataFrame` — one row per `chain × draw × coordinate`, each variable a column. Hand that frame to any plotting library; `tidydraws` does no plotting itself.
+`parameter_draws()` is the entry point: it pulls posterior draws out of an ArviZ `DataTree` into a tidy Polars `DataFrame` — one row per `chain × draw × coordinate`, each variable a column. Hand that frame to any plotting library; `tidydraws` does no plotting itself.
 
 ## The string spec
 
@@ -29,7 +29,19 @@ import polars as pl
 import arviz as az
 import tidydraws as td
 from xarray import DataArray
-from lets_plot import *
+from lets_plot import (
+    LetsPlot,
+    aes,
+    facet_wrap,
+    geom_density,
+    geom_hline,
+    geom_jitter,
+    geom_pointrange,
+    ggplot,
+    labs,
+    scale_color_gradient,
+    theme_minimal,
+)
 LetsPlot.setup_html()
 
 np.random.seed(7)
@@ -57,7 +69,7 @@ dt = az.from_dict(
 The whole call site is one line:
 
 ```{python}
-beta_df = td.spread_draws(dt, "beta[groups]", "intercept[groups]")
+beta_df = td.parameter_draws(dt, "beta[groups]", "intercept[groups]")
 beta_df.head()
 ```
 
@@ -107,7 +119,7 @@ Request `beta[groups]` and the scalar `sigma` together: `sigma` is broadcast ont
 
 ```{python}
 #| fig-cap: "Posterior `beta` by group, coloured by the draw's `sigma` — the cross-dimension join in action."
-mixed = td.spread_draws(dt, "beta[groups]", "sigma")
+mixed = td.parameter_draws(dt, "beta[groups]", "sigma")
 
 (
     ggplot(mixed.to_pandas(), aes("groups", "beta"))
@@ -125,7 +137,7 @@ mixed = td.spread_draws(dt, "beta[groups]", "sigma")
 
 ```{python}
 #| fig-cap: "Posterior density of `gamma` over `time × group`."
-gamma_df = td.spread_draws(dt, "gamma[time, groups]")
+gamma_df = td.parameter_draws(dt, "gamma[time, groups]")
 
 (
     ggplot(gamma_df.to_pandas(), aes("gamma", fill="groups"))
@@ -160,4 +172,4 @@ from plotnine import (
 ```
 :::
 
-Next, join prediction draws to covariates with [`add_epred_draws()`](add_epred_draws.qmd).
+Next, join prediction draws to covariates with [`prediction_draws()`](prediction_draws.qmd).

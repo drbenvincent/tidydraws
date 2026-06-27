@@ -107,7 +107,7 @@ def _align_dims(
     return result
 
 
-def spread_draws(
+def parameter_draws(
     dt: xr.DataTree,
     *var_specs: str,
     group: str = "posterior",
@@ -141,26 +141,26 @@ def spread_draws(
     Examples
     --------
     # Scalar parameter (no duplication)
-    spread_draws(dt, "sigma")
+    parameter_draws(dt, "sigma")
     # -> columns: chain, draw, sigma
     # -> 4 x 1000 = 4,000 rows
 
     # Array parameter spread over a named dim
-    spread_draws(dt, "beta[groups]", "intercept[groups]")
+    parameter_draws(dt, "beta[groups]", "intercept[groups]")
     # -> columns: chain, draw, groups, beta, intercept
     # -> 4 x 1000 x 4 = 16,000 rows (NOT 320,000)
 
     # Mix of scalar and array (sigma broadcast-joined to group-level params)
-    spread_draws(dt, "beta[groups]", "sigma")
+    parameter_draws(dt, "beta[groups]", "sigma")
     # -> columns: chain, draw, groups, beta, sigma
     # -> 4 x 1000 x 4 = 16,000 rows; sigma repeated per group (explicit and expected)
 
     # Different groups (prior vs posterior)
-    spread_draws(dt, "beta[groups]", group="prior")
+    parameter_draws(dt, "beta[groups]", group="prior")
     # -> extract prior draws for beta
 
     # Nested dimensions
-    spread_draws(dt, "gamma[time, group]")
+    parameter_draws(dt, "gamma[time, group]")
     # -> columns: chain, draw, time, group, gamma
     """
     if group not in dt.children:
@@ -204,7 +204,7 @@ def spread_draws(
     return _align_dims(frames, chain_dim=chain_dim, draw_dim=draw_dim)
 
 
-def add_epred_draws(
+def prediction_draws(
     dt: xr.DataTree,
     newdata,
     var_name,
@@ -251,7 +251,7 @@ def add_epred_draws(
     Examples
     --------
     # Basic usage — newdata read from dt
-    pred_df = add_epred_draws(dt, newdata=None, var_name="mu")
+    pred_df = prediction_draws(dt, newdata=None, var_name="mu")
     # -> columns: chain, draw, obs_ind, x, group, mu
     # -> 4 x 1000 x 80 = 320,000 rows
 
@@ -261,7 +261,7 @@ def add_epred_draws(
 
     # Provide custom newdata (e.g., a finer grid)
     fine_grid = pl.DataFrame({"x": np.linspace(0, 20, 200), "group": ...})
-    add_epred_draws(dt, newdata=fine_grid, var_name="mu")
+    prediction_draws(dt, newdata=fine_grid, var_name="mu")
     """
 
     # Check if group exists in the DataTree
@@ -321,7 +321,7 @@ def _coerce_to_dataframe(newdata) -> pl.DataFrame:
     )
 
 
-def spread_draws_compare(
+def compare_draws(
     dt: xr.DataTree,
     *var_specs: str,
     groups: list[str] = ["posterior", "prior"],
@@ -330,7 +330,7 @@ def spread_draws_compare(
     """
     Extract and stack draws from multiple groups (e.g., posterior and prior).
 
-    Calls spread_draws() for each group, adds a column identifying the source group,
+    Calls parameter_draws() for each group, adds a column identifying the source group,
     and concatenates the results into a single DataFrame for easy comparison.
 
     Parameters
@@ -338,7 +338,7 @@ def spread_draws_compare(
     dt : xr.DataTree
         ArviZ DataTree object.
     *var_specs : str
-        Variable specifications (as for spread_draws()).
+        Variable specifications (as for parameter_draws()).
     groups : list[str]
         Which groups to extract and stack. Default ["posterior", "prior"].
     group_name : str
@@ -352,7 +352,7 @@ def spread_draws_compare(
     Example
     -------
     # Extract posterior and prior for side-by-side forest plots
-    compare_df = spread_draws_compare(dt, "beta[groups]",
+    compare_df = compare_draws(dt, "beta[groups]",
                                        groups=["posterior", "prior"])
     # -> columns: chain, draw, groups, beta, source
     # -> source in {"posterior", "prior"}
@@ -361,8 +361,8 @@ def spread_draws_compare(
     # Collect results from each group
     frames = []
     for group in groups:
-        # Call spread_draws for this group
-        group_frame = spread_draws(dt, *var_specs, group=group)
+        # Call parameter_draws for this group
+        group_frame = parameter_draws(dt, *var_specs, group=group)
         # Add the source group identifier column
         group_frame = group_frame.with_columns(pl.lit(group).alias(group_name))
         frames.append(group_frame)
