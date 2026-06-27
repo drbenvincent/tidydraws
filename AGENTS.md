@@ -52,21 +52,6 @@ Key point: prefix Python/pytest commands with `uv run` so they use the project's
 
 ---
 
-## Implementation Phases
-
-Each phase has a detailed agent definition in `.github/agents/phase-N-*.agent.md`. Work through them in order; validate each phase's checklist before moving on.
-
-| Phase | File | Goal |
-| --- | --- | --- |
-| 1 | `phase-1-setup` | Repo structure + `pyproject.toml` + `uv sync` |
-| 2 | `phase-2-extract` | `spread_draws()` + helpers in `tidydraws/_extract.py` |
-| 3 | `phase-3-test-extract` | Tests for `spread_draws()` (row counts, lazy, errors) |
-| 4 | `phase-4-utilities` | Refine `_parse_var_spec`, `_datatree_group_to_lazy`, `_align_dims` |
-| 5 | `phase-5-predict` | `add_epred_draws()` (left-join, fail-loud) |
-| 6 | `phase-6-test-predict` | Tests for `add_epred_draws()` |
-| 7 | `phase-7-compare` | `spread_draws_compare()` (stack groups) |
-| 8 | `phase-8-docs` | Quickstart, tutorials, migration guide, example |
-
 ### Key signatures
 
 ```python
