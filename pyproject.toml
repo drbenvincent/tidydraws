@@ -77,6 +77,7 @@ dev = [
     "lets-plot",
     "plotnine",
     "pymc>=6.0.1",
+    "pytest-cov>=7.1.0",
 ]
 
 [tool.ruff]
@@ -95,7 +96,21 @@ docstring-code-format = true
 addopts = [
     "-v",
     "--color=yes",
+    "--cov=tidydraws",
+    "--cov-report=term-missing",
 ]
+
+[tool.coverage.run]
+source = ["tidydraws"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
+fail_under = 80
 
 [tool.mypy]
 files = "tidydraws/*.py"

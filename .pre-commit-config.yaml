@@ -30,3 +30,15 @@ repos:
         args: [--ignore-missing-imports]
         files: ^tidydraws/
         additional_dependencies: [numpy>=1.20, pandas-stubs, polars]
+  - repo: https://github.com/Lucas-C/pre-commit-hooks
+    rev: v1.5.5
+    hooks:
+      - id: insert-license
+        name: Add MIT license header to Python files
+        args:
+          - --license-filepath=LICENSE_HEADER.txt
+          - --comment-style=#
+          - --detect-license-in-X-top-lines=10
+          - --use-current-year
+        files: \.py$
+        exclude: ^tests/__init__\.py$
