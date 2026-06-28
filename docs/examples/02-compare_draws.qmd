@@ -148,21 +148,14 @@ A different cut: 89% intervals per group, dodged by source. The posterior interv
 
 ```{python}
 # | fig-cap: "Prior vs posterior 89% credible intervals of group-specific slopes."
-ci = (
-    compare
-    .group_by("groups", "source")
-    .agg(
-        pl.col("beta").quantile(0.055).alias("lower"),
-        pl.col("beta").median().alias("median"),
-        pl.col("beta").quantile(0.945).alias("upper"),
-    )
-    .sort("groups", "source")
-)
+ci = td.point_interval(compare, "beta", group_by=["groups", "source"], probs=(0.89,))
 
 (
-    ggplot(ci.to_pandas(), aes("groups", "median", color="source"))
+    ggplot(ci.to_pandas(), aes("groups", "beta", color="source"))
     + geom_pointrange(
-        aes(ymin="lower", ymax="upper"), position=position_dodge(0.5), size=0.8
+        aes(ymin="beta_lower", ymax="beta_upper"),
+        position=position_dodge(0.5),
+        size=0.8,
     )
     + geom_pointrange(
         data=truth.to_pandas(),

@@ -24,5 +24,12 @@ __version__ = "0.1.0"
 from ._extract import parameter_draws as parameter_draws
 from ._extract import prediction_draws as prediction_draws
 from ._extract import compare_draws as compare_draws
+from ._summarise import point_interval as point_interval
 
-__all__ = ["parameter_draws", "prediction_draws", "compare_draws", "__version__"]
+__all__ = [
+    "parameter_draws",
+    "prediction_draws",
+    "compare_draws",
+    "point_interval",
+    "__version__",
+]

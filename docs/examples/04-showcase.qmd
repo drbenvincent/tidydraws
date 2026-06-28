@@ -47,7 +47,6 @@ from _showcase_models import (
     multiple_regression,
     logistic,
     simple_regression_1chain,
-    interval_summary,
 )
 
 LetsPlot.setup_html()
@@ -62,7 +61,9 @@ Scalar parameters only — no group dimensions.  Exercises the simplest extracti
 dt, obs = simple_regression(seed=2026)
 draws = td.parameter_draws(dt, "alpha", "beta", "sigma")
 pred = td.prediction_draws(dt, newdata=obs, var_name="mu")
-pred_summary = interval_summary(pred, "mu", ["obs_ind", "x", "y"], [0.50, 0.80, 0.95])
+pred_summary = td.point_interval(
+    pred, "mu", group_by=["obs_ind", "x", "y"], probs=(0.50, 0.80, 0.95)
+)
 ```
 
 ### Bivariate posterior of intercept and slope
@@ -83,9 +84,9 @@ pred_summary = interval_summary(pred, "mu", ["obs_ind", "x", "y"], [0.50, 0.80, 
 
 ```{python}
 (
-    ggplot(pred_summary.filter(pl.col("prob") == 0.95).to_pandas(), aes("x"))
-    + geom_ribbon(aes(ymin="lower", ymax="upper"), alpha=0.25)
-    + geom_line(aes(y="median"), color="#2166ac", size=0.8)
+    ggplot(pred_summary.to_pandas(), aes("x"))
+    + geom_ribbon(aes(ymin="mu_lower_0.95", ymax="mu_upper_0.95"), alpha=0.25)
+    + geom_line(aes(y="mu"), color="#2166ac", size=0.8)
     + geom_point(aes(y="y"), data=obs.to_pandas(), alpha=0.6, size=1.5)
     + labs(x="x", y="y", title="Predictive fit (95% ribbon)")
     + theme_minimal()
@@ -100,15 +101,15 @@ One-dimensional `alpha[group]` with string coordinate labels.  Exercises `_datat
 # | cache: true
 dt, obs = varying_intercepts(seed=2027)
 draws = td.parameter_draws(dt, "alpha[group]")
-forest = interval_summary(draws, "alpha", "group", [0.50, 0.89])
+forest = td.point_interval(draws, "alpha", group_by="group", probs=(0.50, 0.89))
 ```
 
 ### Forest plot with string labels
 
 ```{python}
 (
-    ggplot(forest.filter(pl.col("prob") == 0.89).to_pandas(), aes("group", "median"))
-    + geom_pointrange(aes(ymin="lower", ymax="upper"), size=0.8)
+    ggplot(forest.to_pandas(), aes("group", "alpha"))
+    + geom_pointrange(aes(ymin="alpha_lower_0.89", ymax="alpha_upper_0.89"), size=0.8)
     + geom_hline(yintercept=0, linetype="dashed", color="#888888")
     + labs(x="group", y="intercept (α)", title="Varying intercepts (89% intervals)")
     + theme_minimal()
@@ -190,17 +191,17 @@ coefs = pl.concat([
         pl.lit("b3").alias("predictor")
     ),
 ])
-coef_forest = interval_summary(coefs, "value", ["predictor", "group"], [0.89])
+coef_forest = td.point_interval(
+    coefs, "value", group_by=["predictor", "group"], probs=(0.89,)
+)
 ```
 
 ### Faceted coefficient forest
 
 ```{python}
 (
-    ggplot(
-        coef_forest.filter(pl.col("prob") == 0.89).to_pandas(), aes("group", "median")
-    )
-    + geom_pointrange(aes(ymin="lower", ymax="upper"), size=0.7)
+    ggplot(coef_forest.to_pandas(), aes("group", "value"))
+    + geom_pointrange(aes(ymin="value_lower", ymax="value_upper"), size=0.7)
     + geom_hline(yintercept=0, linetype="dashed", color="#888888")
     + facet_wrap(facets="predictor", ncol=3)
     + labs(
@@ -226,21 +227,20 @@ pred_draws = draws.join(grid.select(["obs_ind", "group", "x"]), on="group")
 pred_draws = pred_draws.with_columns(
     (1 / (1 + (-pl.col("alpha") - pl.col("beta") * pl.col("x")).exp())).alias("p"),
 )
-pred_summary = interval_summary(
-    pred_draws, "p", ["obs_ind", "x", "group"], [0.80, 0.95]
+pred_summary = td.point_interval(
+    pred_draws, "p", group_by=["obs_ind", "x", "group"], probs=(0.80, 0.95)
 )
 ```
-
-### Probability ribbon with observed data
-
 ```{python}
 (
     ggplot(
-        pred_summary.filter(pl.col("prob") == 0.95).to_pandas(),
+        pred_summary.to_pandas(),
         aes("x"),
     )
-    + geom_ribbon(aes(ymin="lower", ymax="upper", fill="group"), alpha=0.25)
-    + geom_line(aes(y="median", color="group"), size=0.8)
+    + geom_ribbon(
+        aes(ymin="p_lower_0.95", ymax="p_upper_0.95", fill="group"), alpha=0.25
+    )
+    + geom_line(aes(y="p", color="group"), size=0.8)
     + geom_jitter(
         aes(y="y"),
         data=obs.with_columns(pl.col("y").cast(pl.Float64)).to_pandas(),
