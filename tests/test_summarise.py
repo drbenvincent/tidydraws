@@ -126,8 +126,8 @@ class TestMultipleProbs:
         result = point_interval(tidy_df, "beta", probs=(0.5, 0.89))
         expected_cols = {
             "beta",
-            "beta_lower_0.5",
-            "beta_upper_0.5",
+            "beta_lower_0.50",
+            "beta_upper_0.50",
             "beta_lower_0.89",
             "beta_upper_0.89",
         }
@@ -137,8 +137,8 @@ class TestMultipleProbs:
         result = point_interval(tidy_df, "beta", probs=(0.5, 0.8, 0.95))
         expected = {"beta"}
         for p in (0.5, 0.8, 0.95):
-            expected.add(f"beta_lower_{p}")
-            expected.add(f"beta_upper_{p}")
+            expected.add(f"beta_lower_{p:.2f}")
+            expected.add(f"beta_upper_{p:.2f}")
         assert set(result.columns) == expected
 
 

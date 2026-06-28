@@ -176,7 +176,7 @@ def point_interval(
         # ----- ETI: pure Polars quantile expressions (fast) -----
         interval_exprs: list[pl.Expr] = []
         for prob in probs:
-            suffix = "" if single_prob else f"_{prob}"
+            suffix = "" if single_prob else f"_{prob:.2f}"
             tail = (1.0 - prob) / 2.0
             interval_exprs.append(
                 pl.col(value).quantile(tail).alias(f"{value}_lower{suffix}")
@@ -212,7 +212,7 @@ def point_interval(
                     key_dict = dict(zip(gb, group_keys))
 
                 for prob in probs:
-                    suffix = "" if single_prob else f"_{prob}"
+                    suffix = "" if single_prob else f"_{prob:.2f}"
                     lower, upper = _hdi_bounds(
                         group_df.get_column(value).to_numpy(), prob
                     )
@@ -227,7 +227,7 @@ def point_interval(
             # Ungrouped — compute on the whole column
             row: dict = {}
             for prob in probs:
-                suffix = "" if single_prob else f"_{prob}"
+                suffix = "" if single_prob else f"_{prob:.2f}"
                 lower, upper = _hdi_bounds(data.get_column(value).to_numpy(), prob)
                 row[f"{value}_lower{suffix}"] = lower
                 row[f"{value}_upper{suffix}"] = upper
