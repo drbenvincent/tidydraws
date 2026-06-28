@@ -27,7 +27,7 @@ MCMC draws into one summary row per group.
 
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 
 import numpy as np
 import polars as pl
@@ -109,9 +109,9 @@ def point_interval(
         **Single prob** (e.g. ``probs=(0.89,)``):
             ``{value}``, ``{value}_lower``, ``{value}_upper``
 
-        **Multiple probs** (e.g. ``probs=(0.5, 0.89)``):
-            ``{value}``, ``{value}_lower``, ``{value}_upper``,
-            ``{value}_lower_0.5``, ``{value}_upper_0.5``
+        **Multiple probs** (e.g. ``probs=(0.50, 0.89)``):
+            ``{value}``, ``{value}_lower_0.50``, ``{value}_upper_0.50``,
+            ``{value}_lower_0.89``, ``{value}_upper_0.89``
 
     Examples
     --------
@@ -153,6 +153,14 @@ def point_interval(
         if not 0 < p < 1:
             raise ValueError(f"Each probability in `probs` must be in (0, 1). Got {p}.")
 
+    # Check for duplicate suffix names after .2f rounding
+    formatted = {f"{p:.2f}" for p in probs}
+    if len(formatted) != len(probs):
+        raise ValueError(
+            "Two or more probabilities produce the same suffix after formatting. "
+            f"Got: {probs}"
+        )
+
     # Normalise group_by to a list
     gb: list[str] = []
     if group_by is not None:
@@ -163,6 +171,11 @@ def point_interval(
                     f"Group-by column '{col}' not found in data. "
                     f"Available columns: {list(data.columns)}"
                 )
+    if len(gb) != len(set(gb)):
+        raise ValueError(
+            f"Duplicate columns in `group_by`: {gb}. "
+            "Each column should appear at most once."
+        )
 
     # ----- Point estimate expression -----
     if point == "median":

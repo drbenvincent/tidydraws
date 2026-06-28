@@ -243,6 +243,14 @@ class TestErrors:
         with pytest.raises(ValueError, match="Group-by column.*not found"):
             point_interval(tidy_df, "beta", group_by="missing_col")
 
+    def test_prob_collision(self, tidy_df):
+        with pytest.raises(ValueError, match="produce the same suffix"):
+            point_interval(tidy_df, "beta", probs=(0.891, 0.894))
+
+    def test_duplicate_group_by(self, tidy_df):
+        with pytest.raises(ValueError, match="Duplicate columns"):
+            point_interval(tidy_df, "beta", group_by=["groups", "groups"])
+
 
 # ---------------------------------------------------------------------------
 # HDI interval type (smoke)
@@ -261,3 +269,26 @@ class TestHDI:
         assert result.height == 3
         for row in result.iter_rows(named=True):
             assert row["beta_lower"] <= row["beta"] <= row["beta_upper"]
+
+    def test_hdi_multi_prob(self, tidy_df):
+        """HDI with multiple probs — all suffixed columns."""
+        result = point_interval(tidy_df, "beta", probs=(0.5, 0.89), interval="hdi")
+        assert "beta_lower_0.50" in result.columns
+        assert "beta_upper_0.50" in result.columns
+        assert "beta_lower_0.89" in result.columns
+        assert "beta_upper_0.89" in result.columns
+        # The widest (89%) HDI must contain the median
+        assert result.get_column("beta_lower_0.89")[0] <= result.get_column("beta")[0]
+        assert result.get_column("beta_upper_0.89")[0] >= result.get_column("beta")[0]
+
+    def test_hdi_grouped_multi_prob(self, tidy_df):
+        """HDI with group_by + multiple probs."""
+        result = point_interval(
+            tidy_df, "beta", group_by="groups", probs=(0.5, 0.89), interval="hdi"
+        )
+        assert result.height == 3
+        assert "beta_lower_0.50" in result.columns
+        assert "beta_lower_0.89" in result.columns
+        for row in result.iter_rows(named=True):
+            # The widest (89%) HDI must contain the median
+            assert row["beta_lower_0.89"] <= row["beta"] <= row["beta_upper_0.89"]
