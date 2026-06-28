@@ -32,11 +32,12 @@ sections:
 # API Reference ---------------------------------------------------------------
 reference:
   - title: Functions
-    desc: Extract and join tidy draws from ArviZ DataTrees.
+    desc: Extract, join, and summarise tidy draws from ArviZ DataTrees.
     contents:
       - parameter_draws
       - prediction_draws
       - compare_draws
+      - point_interval
 
 # Appearance ------------------------------------------------------------------
 navbar_style: mint
