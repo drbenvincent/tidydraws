@@ -107,32 +107,16 @@ dt.update(prior)
 
 ```{python}
 beta_df = td.parameter_draws(dt, "beta[groups]")
-beta_summary = (
-    beta_df
-    .group_by("groups")
-    .agg(
-        pl.col("beta").quantile(0.055).alias("lower"),
-        pl.col("beta").median().alias("median"),
-        pl.col("beta").quantile(0.945).alias("upper"),
-    )
-    .sort("groups")
-)
+beta_summary = td.point_interval(beta_df, "beta", group_by="groups").sort("groups")
 compare = td.compare_draws(dt, "beta[groups]")
 pred = td.prediction_draws(dt, newdata=observed, var_name="mu")
-pred_summary = (
-    pred
-    .group_by("obs_ind", "x", "group")
-    .agg(
-        pl.col("mu").quantile(0.055).alias("lower"),
-        pl.col("mu").median().alias("median"),
-        pl.col("mu").quantile(0.945).alias("upper"),
-    )
-    .sort("x")
+pred_summary = td.point_interval(pred, "mu", group_by=["obs_ind", "x", "group"]).sort(
+    "x"
 )
 
 p_forest = (
-    ggplot(beta_summary.to_pandas(), aes("groups", "median"))
-    + geom_pointrange(aes(ymin="lower", ymax="upper"), size=0.8)
+    ggplot(beta_summary.to_pandas(), aes("groups", "beta"))
+    + geom_pointrange(aes(ymin="beta_lower", ymax="beta_upper"), size=0.8)
     + geom_hline(yintercept=0, linetype="dashed", color="#888888")
     + labs(x="group", y="beta", title="Forest plot")
 )
@@ -150,12 +134,11 @@ p_compare = (
 p_pred = (
     ggplot(pred_summary.to_pandas(), aes("x"))
     + geom_ribbon(
-        aes(ymin="lower", ymax="upper", fill=as_discrete("group")), alpha=0.25
+        aes(ymin="mu_lower", ymax="mu_upper", fill=as_discrete("group")), alpha=0.25
     )
-    + geom_line(aes(y="median", color=as_discrete("group")), size=0.8)
+    + geom_line(aes(y="mu", color=as_discrete("group")), size=0.8)
     + labs(x="x", y="mu", color="group", fill="group", title="Predictive fit")
 )
-
 g = gggrid([p_forest, p_density, p_compare, p_pred], ncol=2)
 ggsave(g, "index-plot.png", path="../docs/assets", scale=1.5)
 g

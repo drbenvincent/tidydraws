@@ -38,7 +38,8 @@ for parent in [Path.cwd(), *Path.cwd().parents]:
         sys.path.insert(0, str(helper_dir))
         break
 
-from _pymc_workflow import interval_summary, simulate_grouped_regression
+from tidydraws import point_interval
+from _pymc_workflow import simulate_grouped_regression
 
 LetsPlot.setup_html()
 
@@ -112,13 +113,13 @@ Summarise `mu` per observation with 50%, 80%, and 95% intervals, then draw neste
 
 ```{python}
 # | fig-cap: "Posterior expected fit by group with nested credible ribbons, true lines, and observed data."
-summary = interval_summary(
-    pred, "mu", ["obs_ind", "x", "groups", "mu_true", "y"], [0.50, 0.80, 0.95]
-).sort(["groups", "prob", "x"])
-summary_95 = summary.filter(pl.col("prob") == 0.95)
-summary_80 = summary.filter(pl.col("prob") == 0.80)
-summary_50 = summary.filter(pl.col("prob") == 0.50)
-fit_median = summary_50
+summary = point_interval(
+    pred,
+    "mu",
+    group_by=["obs_ind", "x", "groups", "mu_true", "y"],
+    probs=(0.50, 0.80, 0.95),
+).sort(["groups", "x"])
+fit_median = summary
 observed_points = (
     summary.select("x", "y", "groups", "mu_true").unique().sort(["groups", "x"])
 )
@@ -126,32 +127,37 @@ observed_points = (
 (
     ggplot(summary.to_pandas(), aes("x"))
     + geom_ribbon(
-        data=summary_95.to_pandas(),
         mapping=aes(
-            ymin="lower", ymax="upper", fill=as_discrete("groups"), group="groups"
+            ymin="mu_lower_0.95",
+            ymax="mu_upper_0.95",
+            fill=as_discrete("groups"),
+            group="groups",
         ),
         alpha=0.10,
         color="transparent",
     )
     + geom_ribbon(
-        data=summary_80.to_pandas(),
         mapping=aes(
-            ymin="lower", ymax="upper", fill=as_discrete("groups"), group="groups"
+            ymin="mu_lower_0.80",
+            ymax="mu_upper_0.80",
+            fill=as_discrete("groups"),
+            group="groups",
         ),
         alpha=0.18,
         color="transparent",
     )
     + geom_ribbon(
-        data=summary_50.to_pandas(),
         mapping=aes(
-            ymin="lower", ymax="upper", fill=as_discrete("groups"), group="groups"
+            ymin="mu_lower_0.50",
+            ymax="mu_upper_0.50",
+            fill=as_discrete("groups"),
+            group="groups",
         ),
         alpha=0.28,
         color="transparent",
     )
     + geom_line(
-        data=fit_median.to_pandas(),
-        mapping=aes(y="median", color=as_discrete("groups")),
+        mapping=aes(y="mu", color=as_discrete("groups")),
         size=0.9,
     )
     + geom_line(
@@ -187,43 +193,47 @@ pred_y = td.prediction_draws(dt, newdata=observed, var_name="y").rename({
     "y_right": "y_obs"
 })
 
-summary_y = interval_summary(
-    pred_y, "y", ["obs_ind", "x", "groups", "mu_true", "y_obs"], [0.50, 0.80, 0.95]
-).sort(["groups", "prob", "x"])
-summary_y_95 = summary_y.filter(pl.col("prob") == 0.95)
-summary_y_80 = summary_y.filter(pl.col("prob") == 0.80)
-summary_y_50 = summary_y.filter(pl.col("prob") == 0.50)
-pred_median = summary_y_50
+summary_y = point_interval(
+    pred_y,
+    "y",
+    group_by=["obs_ind", "x", "groups", "mu_true", "y_obs"],
+    probs=(0.50, 0.80, 0.95),
+).sort(["groups", "x"])
 
 (
     ggplot(summary_y.to_pandas(), aes("x"))
     + geom_ribbon(
-        data=summary_y_95.to_pandas(),
         mapping=aes(
-            ymin="lower", ymax="upper", fill=as_discrete("groups"), group="groups"
+            ymin="y_lower_0.95",
+            ymax="y_upper_0.95",
+            fill=as_discrete("groups"),
+            group="groups",
         ),
         alpha=0.10,
         color="transparent",
     )
     + geom_ribbon(
-        data=summary_y_80.to_pandas(),
         mapping=aes(
-            ymin="lower", ymax="upper", fill=as_discrete("groups"), group="groups"
+            ymin="y_lower_0.80",
+            ymax="y_upper_0.80",
+            fill=as_discrete("groups"),
+            group="groups",
         ),
         alpha=0.18,
         color="transparent",
     )
     + geom_ribbon(
-        data=summary_y_50.to_pandas(),
         mapping=aes(
-            ymin="lower", ymax="upper", fill=as_discrete("groups"), group="groups"
+            ymin="y_lower_0.50",
+            ymax="y_upper_0.50",
+            fill=as_discrete("groups"),
+            group="groups",
         ),
         alpha=0.28,
         color="transparent",
     )
     + geom_line(
-        data=pred_median.to_pandas(),
-        mapping=aes(y="median", color=as_discrete("groups")),
+        mapping=aes(y="y", color=as_discrete("groups")),
         size=0.9,
     )
     + geom_line(
@@ -259,29 +269,24 @@ from lets_plot import facet_wrap
 (
     ggplot(summary.to_pandas(), aes("x"))
     + geom_ribbon(
-        data=summary_95.to_pandas(),
-        mapping=aes(ymin="lower", ymax="upper", group="groups"),
+        mapping=aes(ymin="mu_lower_0.95", ymax="mu_upper_0.95", group="groups"),
         fill="steelblue",
         alpha=0.10,
         color="transparent",
     )
     + geom_ribbon(
-        data=summary_80.to_pandas(),
-        mapping=aes(ymin="lower", ymax="upper", group="groups"),
+        mapping=aes(ymin="mu_lower_0.80", ymax="mu_upper_0.80", group="groups"),
         fill="steelblue",
         alpha=0.18,
         color="transparent",
     )
     + geom_ribbon(
-        data=summary_50.to_pandas(),
-        mapping=aes(ymin="lower", ymax="upper", group="groups"),
+        mapping=aes(ymin="mu_lower_0.50", ymax="mu_upper_0.50", group="groups"),
         fill="steelblue",
         alpha=0.28,
         color="transparent",
     )
-    + geom_line(
-        data=fit_median.to_pandas(), mapping=aes(y="median"), color="navy", size=0.8
-    )
+    + geom_line(mapping=aes(y="mu"), color="navy", size=0.8)
     + geom_line(
         data=observed_points.to_pandas(),
         mapping=aes(y="mu_true"),
@@ -350,19 +355,19 @@ Subset with `.filter()` before summarising — useful when the full prediction s
 west = td.prediction_draws(dt, newdata=observed, var_name="mu").filter(
     pl.col("groups") == "West"
 )
-s_west = interval_summary(west, "mu", ["obs_ind", "x", "y", "mu_true"], [0.89]).sort(
-    "x"
-)
+s_west = point_interval(
+    west, "mu", group_by=["obs_ind", "x", "y", "mu_true"], probs=(0.89,)
+).sort("x")
 
 (
     ggplot(s_west.to_pandas(), aes("x"))
     + geom_ribbon(
-        aes(ymin="lower", ymax="upper"),
+        aes(ymin="mu_lower", ymax="mu_upper"),
         fill="steelblue",
         alpha=0.3,
         color="transparent",
     )
-    + geom_line(aes(y="median"), color="navy", size=0.9)
+    + geom_line(aes(y="mu"), color="navy", size=0.9)
     + geom_line(aes(y="mu_true"), color="firebrick", linetype="dashed", size=0.8)
     + geom_point(aes(y="y"), color="black", size=1.6, alpha=0.5)
     + labs(x="x", y="mu / y", title="West fit with observed data")

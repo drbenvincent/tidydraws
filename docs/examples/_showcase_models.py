@@ -356,30 +356,3 @@ def simple_regression_1chain(seed: int = 2026):
 # ---------------------------------------------------------------------------
 # Shared plotting helper
 # ---------------------------------------------------------------------------
-
-
-def interval_summary(
-    data: pl.DataFrame,
-    value: str,
-    by,
-    probs: list[float],
-) -> pl.DataFrame:
-    """Summarise draws into medians and central intervals."""
-    by = [by] if isinstance(by, str) else list(by)
-    pieces = []
-    for prob in probs:
-        tail = (1 - prob) / 2
-        pieces.append(
-            data
-            .group_by(by)
-            .agg(
-                pl.col(value).quantile(tail).alias("lower"),
-                pl.col(value).median().alias("median"),
-                pl.col(value).quantile(1 - tail).alias("upper"),
-            )
-            .with_columns(
-                pl.lit(prob).alias("prob"),
-                pl.lit(f"{int(prob * 100)}%").alias("interval"),
-            )
-        )
-    return pl.concat(pieces).sort([*by, "prob"])
