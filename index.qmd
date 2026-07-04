@@ -269,18 +269,16 @@ alt_density = (
     .encode(x="beta:Q", y="density:Q", color="groups:N")
     .properties(title="Posterior density", width=200, height=200)
 )
-
-# Prior vs posterior
 alt_compare = (
     alt
     .Chart(compare.to_pandas())
     .transform_density("beta", groupby=["groups", "source"], as_=["beta", "density"])
     .mark_area(opacity=0.5)
     .encode(x="beta:Q", y="density:Q", color="source:N")
+    .properties(width=95, height=85)
     .facet("groups:N", columns=2)
     .properties(title="Prior vs posterior")
 )
-
 # Predictive fit
 alt_pred = (
     alt
