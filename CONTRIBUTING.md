@@ -40,6 +40,30 @@ uv sync --all-extras
 
 Pre-commit hooks persist across sessions — no need to reinstall unless `.pre-commit-config.yaml` changes.
 
+### Upgrading a single dependency
+
+To update a specific package (e.g. `great-docs`) to its latest allowed version:
+
+```bash
+uv sync --all-extras --upgrade-package great-docs
+```
+
+The `--upgrade-package` flag updates the lock file resolution for that package only (respecting the version constraint in `pyproject.toml`). `--all-extras` is required because several dev dependencies — including `great-docs` — are listed under `[project.optional-dependencies] dev` rather than in the `[dependency-groups]` section, so a bare `uv sync` would resolve the upgrade but skip installing them.
+
+To upgrade every dependency to the latest compatible version:
+
+```bash
+uv sync --all-extras --upgrade
+```
+
+To upgrade the lock file without touching `.venv` (e.g. to inspect what changed):
+
+```bash
+uv lock --upgrade-package great-docs
+```
+
+After upgrading, run `make install` (which wraps `uv sync --all-extras`) to install any newly resolved packages.
+
 ## Common Dev Commands
 
 Run tests:
