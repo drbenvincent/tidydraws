@@ -32,37 +32,8 @@ import numpy as np
 import polars as pl
 import pymc as pm
 import tidydraws as td
-from lets_plot import (
-    LetsPlot,
-    aes,
-    facet_wrap,
-    geom_density,
-    geom_hline,
-    geom_jitter,
-    geom_line,
-    geom_linerange,
-    geom_point,
-    geom_pointrange,
-    geom_vline,
-    ggplot,
-    labs,
-    scale_color_gradient,
-)
-from plotnine import (
-    ggplot,
-    aes,
-    facet_wrap,
-    geom_density,
-    geom_hline,
-    geom_jitter,
-    geom_line,
-    geom_linerange,
-    geom_point,
-    geom_pointrange,
-    geom_vline,
-    labs,
-    scale_color_gradient,
-)
+import lets_plot as lp
+import plotnine as p9
 
 for parent in [Path.cwd(), *Path.cwd().parents]:
     helper_dir = parent / "docs" / "examples"
@@ -73,7 +44,7 @@ for parent in [Path.cwd(), *Path.cwd().parents]:
 from _pymc_workflow import simulate_grouped_regression
 from tidydraws import point_interval
 
-LetsPlot.setup_html()
+lp.LetsPlot.setup_html()
 
 workflow = simulate_grouped_regression(seed=2026)
 observed = workflow.observed
@@ -85,10 +56,10 @@ The observed data and true generating lines show the group separation before fit
 ```{python}
 # | fig-cap: "Simulated observed data with true group-specific regression lines."
 (
-    ggplot(observed.sort(["groups", "x"]).to_pandas(), aes("x", "y"))
-    + geom_point(aes(color="groups"), alpha=0.65, size=2.0)
-    + geom_line(aes(y="mu_true", color="groups"), size=1.0)
-    + labs(
+    lp.ggplot(observed.sort(["groups", "x"]).to_pandas(), lp.aes("x", "y"))
+    + lp.geom_point(lp.aes(color="groups"), alpha=0.65, size=2.0)
+    + lp.geom_line(lp.aes(y="mu_true", color="groups"), size=1.0)
+    + lp.labs(
         x="x", y="y", color="group", title="Observed data from known group differences"
     )
 )
@@ -136,7 +107,7 @@ dt
 ```
 
 
-
+## Use tidydraws
 One `parameter_draws()` call extracts group slopes and intercepts from the fitted posterior:
 
 ```{python}
@@ -157,17 +128,17 @@ The dashed red lines are the true slopes used to simulate the data.
 ```{python}
 # | fig-cap: "Posterior density of group-specific slopes, with true values marked."
 (
-    ggplot(beta_df.to_pandas(), aes("beta", fill="groups"))
-    + geom_density(alpha=0.45)
-    + geom_vline(
+    lp.ggplot(beta_df.to_pandas(), lp.aes("beta", fill="groups"))
+    + lp.geom_density(alpha=0.45)
+    + lp.geom_vline(
         data=truth.to_pandas(),
-        mapping=aes(xintercept="beta_true"),
+        mapping=lp.aes(xintercept="beta_true"),
         color="firebrick",
         linetype="dashed",
         size=0.8,
     )
-    + facet_wrap(facets="groups", ncol=2)
-    + labs(x="beta", y="density", fill="group", title="Posterior slopes by group")
+    + lp.facet_wrap(facets="groups", ncol=2)
+    + lp.labs(x="beta", y="density", fill="group", title="Posterior slopes by group")
 )
 ```
 
@@ -176,17 +147,17 @@ The dashed red lines are the true slopes used to simulate the data.
 ```{python}
 # | fig-cap: "Posterior density of group-specific slopes, with true values marked."
 (
-    ggplot(beta_df.to_pandas(), aes("beta", fill="groups"))
-    + geom_density(alpha=0.45)
-    + geom_vline(
+    p9.ggplot(beta_df.to_pandas(), p9.aes("beta", fill="groups"))
+    + p9.geom_density(alpha=0.45)
+    + p9.geom_vline(
         data=truth.to_pandas(),
-        mapping=aes(xintercept="beta_true"),
+        mapping=p9.aes(xintercept="beta_true"),
         color="firebrick",
         linetype="dashed",
         size=0.8,
     )
-    + facet_wrap("~groups", ncol=2)
-    + labs(x="beta", y="density", fill="group", title="Posterior slopes by group")
+    + p9.facet_wrap("~groups", ncol=2)
+    + p9.labs(x="beta", y="density", fill="group", title="Posterior slopes by group")
 )
 ```
 
@@ -208,20 +179,20 @@ beta_forest = point_interval(beta_df, "beta", group_by="groups", probs=(0.89,))
 ```{python}
 # | fig-cap: "Posterior slope forest plot with 89% intervals and true values."
 (
-    ggplot(beta_forest.to_pandas(), aes("groups", "beta"))
-    + geom_pointrange(
-        aes(ymin="beta_lower", ymax="beta_upper"),
+    lp.ggplot(beta_forest.to_pandas(), lp.aes("groups", "beta"))
+    + lp.geom_pointrange(
+        lp.aes(ymin="beta_lower", ymax="beta_upper"),
         color="steelblue",
         size=0.9,
     )
-    + geom_point(
+    + lp.geom_point(
         data=truth.to_pandas(),
-        mapping=aes("groups", "beta_true"),
+        mapping=lp.aes("groups", "beta_true"),
         color="firebrick",
         size=2.4,
     )
-    + geom_hline(yintercept=0, linetype="dashed", color="#888888")
-    + labs(x="group", y="beta", title="Posterior slope forest plot")
+    + lp.geom_hline(yintercept=0, linetype="dashed", color="#888888")
+    + lp.labs(x="group", y="beta", title="Posterior slope forest plot")
 )
 ```
 
@@ -230,20 +201,20 @@ beta_forest = point_interval(beta_df, "beta", group_by="groups", probs=(0.89,))
 ```{python}
 # | fig-cap: "Posterior slope forest plot with 89% intervals and true values."
 (
-    ggplot(beta_forest.to_pandas(), aes("groups", "beta"))
-    + geom_pointrange(
-        aes(ymin="beta_lower", ymax="beta_upper"),
+    p9.ggplot(beta_forest.to_pandas(), p9.aes("groups", "beta"))
+    + p9.geom_pointrange(
+        p9.aes(ymin="beta_lower", ymax="beta_upper"),
         color="steelblue",
         size=0.9,
     )
-    + geom_point(
+    + p9.geom_point(
         data=truth.to_pandas(),
-        mapping=aes("groups", "beta_true"),
+        mapping=p9.aes("groups", "beta_true"),
         color="firebrick",
         size=2.4,
     )
-    + geom_hline(yintercept=0, linetype="dashed", color="#888888")
-    + labs(x="group", y="beta", title="Posterior slope forest plot")
+    + p9.geom_hline(yintercept=0, linetype="dashed", color="#888888")
+    + p9.labs(x="group", y="beta", title="Posterior slope forest plot")
 )
 ```
 
@@ -282,15 +253,15 @@ quantile_dots = pl.DataFrame([
 ```{python}
 # | fig-cap: "Quantile dotplot of group-specific slopes: each dot represents 1% posterior mass."
 (
-    ggplot(quantile_dots.to_pandas(), aes("beta", "groups"))
-    + geom_point(size=1.4, alpha=0.65, color="steelblue")
-    + geom_point(
+    lp.ggplot(quantile_dots.to_pandas(), lp.aes("beta", "groups"))
+    + lp.geom_point(size=1.4, alpha=0.65, color="steelblue")
+    + lp.geom_point(
         data=truth.to_pandas(),
-        mapping=aes("beta_true", "groups"),
+        mapping=lp.aes("beta_true", "groups"),
         color="firebrick",
         size=2.4,
     )
-    + labs(x="beta", y="group", title="100-dot posterior summaries")
+    + lp.labs(x="beta", y="group", title="100-dot posterior summaries")
 )
 ```
 
@@ -299,15 +270,15 @@ quantile_dots = pl.DataFrame([
 ```{python}
 # | fig-cap: "Quantile dotplot of group-specific slopes: each dot represents 1% posterior mass."
 (
-    ggplot(quantile_dots.to_pandas(), aes("beta", "groups"))
-    + geom_point(size=1.4, alpha=0.65, color="steelblue")
-    + geom_point(
+    p9.ggplot(quantile_dots.to_pandas(), p9.aes("beta", "groups"))
+    + p9.geom_point(size=1.4, alpha=0.65, color="steelblue")
+    + p9.geom_point(
         data=truth.to_pandas(),
-        mapping=aes("beta_true", "groups"),
+        mapping=p9.aes("beta_true", "groups"),
         color="firebrick",
         size=2.4,
     )
-    + labs(x="beta", y="group", title="100-dot posterior summaries")
+    + p9.labs(x="beta", y="group", title="100-dot posterior summaries")
 )
 ```
 
@@ -350,18 +321,20 @@ truth_contrasts = truth.filter(pl.col("groups") != reference_group).select(
 ```{python}
 # | fig-cap: "Derived slope contrasts against North, with true contrasts in red."
 (
-    ggplot(contrast_forest.to_pandas(), aes("contrast_name", "contrast"))
-    + geom_pointrange(
-        aes(ymin="contrast_lower", ymax="contrast_upper"), color="steelblue", size=0.9
+    lp.ggplot(contrast_forest.to_pandas(), lp.aes("contrast_name", "contrast"))
+    + lp.geom_pointrange(
+        lp.aes(ymin="contrast_lower", ymax="contrast_upper"),
+        color="steelblue",
+        size=0.9,
     )
-    + geom_point(
+    + lp.geom_point(
         data=truth_contrasts.to_pandas(),
-        mapping=aes("contrast_name", "contrast_true"),
+        mapping=lp.aes("contrast_name", "contrast_true"),
         color="firebrick",
         size=2.4,
     )
-    + geom_hline(yintercept=0, linetype="dashed", color="#888888")
-    + labs(
+    + lp.geom_hline(yintercept=0, linetype="dashed", color="#888888")
+    + lp.labs(
         x="contrast",
         y="beta difference",
         title="Posterior slope contrasts against North",
@@ -374,18 +347,20 @@ truth_contrasts = truth.filter(pl.col("groups") != reference_group).select(
 ```{python}
 # | fig-cap: "Derived slope contrasts against North, with true contrasts in red."
 (
-    ggplot(contrast_forest.to_pandas(), aes("contrast_name", "contrast"))
-    + geom_pointrange(
-        aes(ymin="contrast_lower", ymax="contrast_upper"), color="steelblue", size=0.9
+    p9.ggplot(contrast_forest.to_pandas(), p9.aes("contrast_name", "contrast"))
+    + p9.geom_pointrange(
+        p9.aes(ymin="contrast_lower", ymax="contrast_upper"),
+        color="steelblue",
+        size=0.9,
     )
-    + geom_point(
+    + p9.geom_point(
         data=truth_contrasts.to_pandas(),
-        mapping=aes("contrast_name", "contrast_true"),
+        mapping=p9.aes("contrast_name", "contrast_true"),
         color="firebrick",
         size=2.4,
     )
-    + geom_hline(yintercept=0, linetype="dashed", color="#888888")
-    + labs(
+    + p9.geom_hline(yintercept=0, linetype="dashed", color="#888888")
+    + p9.labs(
         x="contrast",
         y="beta difference",
         title="Posterior slope contrasts against North",
@@ -411,16 +386,16 @@ mixed = td.parameter_draws(dt, "beta[groups]", "sigma")
 ```{python}
 # | fig-cap: "Posterior slopes by group, coloured by each draw's residual sigma."
 (
-    ggplot(mixed.to_pandas(), aes("groups", "beta"))
-    + geom_jitter(aes(color="sigma"), width=0.15, alpha=0.15, size=0.8)
-    + geom_point(
+    lp.ggplot(mixed.to_pandas(), lp.aes("groups", "beta"))
+    + lp.geom_jitter(lp.aes(color="sigma"), width=0.15, alpha=0.15, size=0.8)
+    + lp.geom_point(
         data=truth.to_pandas(),
-        mapping=aes("groups", "beta_true"),
+        mapping=lp.aes("groups", "beta_true"),
         color="black",
         size=2.0,
     )
-    + scale_color_gradient(low="steelblue", high="firebrick")
-    + labs(
+    + lp.scale_color_gradient(low="steelblue", high="firebrick")
+    + lp.labs(
         x="group",
         y="beta",
         color="sigma",
@@ -434,16 +409,16 @@ mixed = td.parameter_draws(dt, "beta[groups]", "sigma")
 ```{python}
 # | fig-cap: "Posterior slopes by group, coloured by each draw's residual sigma."
 (
-    ggplot(mixed.to_pandas(), aes("groups", "beta"))
-    + geom_jitter(aes(color="sigma"), width=0.15, alpha=0.15, size=0.8)
-    + geom_point(
+    p9.ggplot(mixed.to_pandas(), p9.aes("groups", "beta"))
+    + p9.geom_jitter(p9.aes(color="sigma"), width=0.15, alpha=0.15, size=0.8)
+    + p9.geom_point(
         data=truth.to_pandas(),
-        mapping=aes("groups", "beta_true"),
+        mapping=p9.aes("groups", "beta_true"),
         color="black",
         size=2.0,
     )
-    + scale_color_gradient(low="steelblue", high="firebrick")
-    + labs(
+    + p9.scale_color_gradient(low="steelblue", high="firebrick")
+    + p9.labs(
         x="group",
         y="beta",
         color="sigma",

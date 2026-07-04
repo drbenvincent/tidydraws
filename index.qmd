@@ -6,13 +6,14 @@ title: "tidydraws"
 ![](docs/assets/logo.jpg)
 A tidybayes-inspired data layer for declarative Bayesian visualisation in Python.
 
-`tidydraws` turns MCMC output (ArviZ `DataTree`) into tidy Polars frames that are ready to plot — one `.to_pandas()` away from any ggplot-like backend. It does no plotting itself. Three functions, three spaces:
+`tidydraws` turns MCMC output (ArviZ `DataTree`) into tidy Polars frames that are ready to plot — one `.to_pandas()` away from any ggplot-like backend. It does no plotting itself. Four functions, four roles:
 
-| Function | Space | Plot archetype |
+| Function | Role | Plot archetype |
 | --- | --- | --- |
-| [`parameter_draws()`](docs/examples/parameter_draws.qmd) | parameter | density, forest, scatter |
-| [`prediction_draws()`](docs/examples/prediction_draws.qmd) | prediction | ribbon + line, fit + data |
-| [`compare_draws()`](docs/examples/compare_draws.qmd) | comparison | prior vs posterior, intervals |
+| [`parameter_draws()`](docs/examples/parameter_draws.qmd) | extract parameters | density, forest, scatter |
+| [`prediction_draws()`](docs/examples/prediction_draws.qmd) | join predictions to covariates | ribbon + line, fit + data |
+| [`compare_draws()`](docs/examples/compare_draws.qmd) | stack prior & posterior | prior vs posterior, intervals |
+| [`point_interval()`](docs/examples/parameter_draws.qmd) | summarise draws | forest, ribbon, pointrange |
 
 ```{python}
 # fmt: off
@@ -22,24 +23,11 @@ A tidybayes-inspired data layer for declarative Bayesian visualisation in Python
 from pathlib import Path
 import sys
 
+import lets_plot as lp
+import plotnine as p9
 import polars as pl
 import pymc as pm
 import tidydraws as td
-from lets_plot import (
-    LetsPlot,
-    aes,
-    as_discrete,
-    facet_wrap,
-    geom_density,
-    geom_hline,
-    geom_line,
-    geom_pointrange,
-    geom_ribbon,
-    ggsave,
-    gggrid,
-    ggplot,
-    labs,
-)
 
 for parent in [Path.cwd(), *Path.cwd().parents]:
     helper_dir = parent / "docs" / "examples"
@@ -49,7 +37,7 @@ for parent in [Path.cwd(), *Path.cwd().parents]:
 
 from _pymc_workflow import simulate_grouped_regression
 
-LetsPlot.setup_html()
+lp.LetsPlot.setup_html()
 
 workflow = simulate_grouped_regression(seed=2026)
 observed = workflow.observed.with_columns(pl.col("groups").alias("group"))
@@ -105,6 +93,8 @@ with pm.Model(coords=coords) as model:
 dt.update(prior)
 ```
 
+## Use tidydraws
+
 ```{python}
 beta_df = td.parameter_draws(dt, "beta[groups]")
 beta_summary = td.point_interval(beta_df, "beta", group_by="groups").sort("groups")
@@ -113,57 +103,102 @@ pred = td.prediction_draws(dt, newdata=observed, var_name="mu")
 pred_summary = td.point_interval(pred, "mu", group_by=["obs_ind", "x", "group"]).sort(
     "x"
 )
+```
+## Plot
+:::: {.panel-tabset}
 
+#### lets-plot
+
+```{python}
 p_forest = (
-    ggplot(beta_summary.to_pandas(), aes("groups", "beta"))
-    + geom_pointrange(aes(ymin="beta_lower", ymax="beta_upper"), size=0.8)
-    + geom_hline(yintercept=0, linetype="dashed", color="#888888")
-    + labs(x="group", y="beta", title="Forest plot")
+    lp.ggplot(beta_summary.to_pandas(), lp.aes("groups", "beta"))
+    + lp.geom_pointrange(lp.aes(ymin="beta_lower", ymax="beta_upper"), size=0.8)
+    + lp.geom_hline(yintercept=0, linetype="dashed", color="#888888")
+    + lp.labs(x="group", y="beta", title="Forest plot")
 )
 p_density = (
-    ggplot(beta_df.to_pandas(), aes("beta", fill="groups"))
-    + geom_density(alpha=0.5)
-    + labs(x="beta", y="density", fill="group", title="Posterior density")
+    lp.ggplot(beta_df.to_pandas(), lp.aes("beta", fill="groups"))
+    + lp.geom_density(alpha=0.5)
+    + lp.labs(x="beta", y="density", fill="group", title="Posterior density")
 )
 p_compare = (
-    ggplot(compare.to_pandas(), aes("beta", fill="source"))
-    + geom_density(alpha=0.5)
-    + facet_wrap(facets="groups", ncol=2)
-    + labs(x="beta", y="density", fill="source", title="Prior vs posterior")
+    lp.ggplot(compare.to_pandas(), lp.aes("beta", fill="source"))
+    + lp.geom_density(alpha=0.5)
+    + lp.facet_wrap(facets="groups", ncol=2)
+    + lp.labs(x="beta", y="density", fill="source", title="Prior vs posterior")
 )
 p_pred = (
-    ggplot(pred_summary.to_pandas(), aes("x"))
-    + geom_ribbon(
-        aes(ymin="mu_lower", ymax="mu_upper", fill=as_discrete("group")), alpha=0.25
+    lp.ggplot(pred_summary.to_pandas(), lp.aes("x"))
+    + lp.geom_ribbon(
+        lp.aes(ymin="mu_lower", ymax="mu_upper", fill=lp.as_discrete("group")),
+        alpha=0.25,
     )
-    + geom_line(aes(y="mu", color=as_discrete("group")), size=0.8)
-    + labs(x="x", y="mu", color="group", fill="group", title="Predictive fit")
+    + lp.geom_line(lp.aes(y="mu", color=lp.as_discrete("group")), size=0.8)
+    + lp.labs(x="x", y="mu", color="group", fill="group", title="Predictive fit")
 )
-g = gggrid([p_forest, p_density, p_compare, p_pred], ncol=2)
-ggsave(g, "index-plot.png", path="../docs/assets", scale=1.5)
+g = lp.gggrid([p_forest, p_density, p_compare, p_pred], ncol=2)
+lp.ggsave(g, "index-plot.png", path="../docs/assets", scale=1.5)
 g
 ```
+
+#### plotnine
+
+```{python}
+p9_forest = (
+    p9.ggplot(beta_summary.to_pandas(), p9.aes("groups", "beta"))
+    + p9.geom_pointrange(p9.aes(ymin="beta_lower", ymax="beta_upper"), size=0.8)
+    + p9.geom_hline(yintercept=0, linetype="dashed", color="#888888")
+    + p9.labs(x="group", y="beta", title="Forest plot")
+)
+p9_density = (
+    p9.ggplot(beta_df.to_pandas(), p9.aes("beta", fill="groups"))
+    + p9.geom_density(alpha=0.5)
+    + p9.labs(x="beta", y="density", fill="group", title="Posterior density")
+)
+p9_compare = (
+    p9.ggplot(compare.to_pandas(), p9.aes("beta", fill="source"))
+    + p9.geom_density(alpha=0.5)
+    + p9.facet_wrap("~groups", ncol=2)
+    + p9.labs(x="beta", y="density", fill="source", title="Prior vs posterior")
+)
+p9_pred = (
+    p9.ggplot(pred_summary.to_pandas(), p9.aes("x"))
+    + p9.geom_ribbon(
+        p9.aes(ymin="mu_lower", ymax="mu_upper", fill="group"),
+        alpha=0.25,
+    )
+    + p9.geom_line(p9.aes(y="mu", color="group"), size=0.8)
+    + p9.labs(x="x", y="mu", color="group", fill="group", title="Predictive fit")
+)
+(p9_forest | p9_density) / (p9_compare | p9_pred)
+```
+
+::::
 
 
 ## Install
 
- With uv
+:::: {.panel-tabset}
+
+#### uv
+
 ```bash
 uv add tidydraws
 ```
 
-With pip
+#### pip
+
 ```bash
 pip install tidydraws
 ```
+
+::::
 
 ## Why tidydraws?
 
 Plotting MCMC output in Python means manually slicing xarray dimensions, iterating groups, and aligning coordinates — imperative, verbose, error-prone. R's [`tidybayes`](https://github.com/mjskay/tidybayes) solved this with a data layer that respects parameter space vs prediction space. `tidydraws` brings that to Python on Polars.
 
-::: {.callout-note}
 `tidydraws` is plotting-backend-agnostic: it returns Polars `DataFrame`s, and `.to_pandas()` bridges to lets-plot, plotnine, or any library that takes pandas. The examples use [lets-plot](https://lets-plot.org/); see the [`parameter_draws()`](docs/examples/parameter_draws.qmd) page for the same plot in plotnine.
-:::
 
 ---
 

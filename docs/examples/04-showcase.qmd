@@ -15,38 +15,8 @@ import sys
 import numpy as np
 import polars as pl
 import tidydraws as td
-from lets_plot import (
-    LetsPlot,
-    aes,
-    as_discrete,
-    facet_wrap,
-    geom_density,
-    geom_density2d,
-    geom_hline,
-    geom_jitter,
-    geom_line,
-    geom_point,
-    geom_pointrange,
-    geom_ribbon,
-    ggplot,
-    labs,
-    theme_minimal,
-)
-from plotnine import (
-    aes,
-    facet_wrap,
-    geom_density,
-    geom_density_2d,
-    geom_hline,
-    geom_jitter,
-    geom_line,
-    geom_point,
-    geom_pointrange,
-    geom_ribbon,
-    ggplot,
-    labs,
-    theme_minimal,
-)
+import lets_plot as lp
+import plotnine as p9
 
 
 for parent in [Path.cwd(), *Path.cwd().parents]:
@@ -65,7 +35,7 @@ from _showcase_models import (
     simple_regression_1chain,
 )
 
-LetsPlot.setup_html()
+lp.LetsPlot.setup_html()
 ```
 
 ## 1. Simple linear regression
@@ -75,6 +45,11 @@ Scalar parameters only — no group dimensions.  Exercises the simplest extracti
 ```{python}
 # | cache: true
 dt, obs = simple_regression(seed=2026)
+```
+
+### Use tidydraws
+
+```{python}
 draws = td.parameter_draws(dt, "alpha", "beta", "sigma")
 pred = td.prediction_draws(dt, newdata=obs, var_name="mu")
 pred_summary = td.point_interval(
@@ -92,11 +67,11 @@ pred_summary = td.point_interval(
 
 ```{python}
 (
-    ggplot(draws.to_pandas(), aes("alpha", "beta"))
-    + geom_density2d(bins=8, alpha=0.8)
-    + geom_point(alpha=0.15, size=1.0, color="#444444")
-    + labs(x="intercept (α)", y="slope (β)", title="Bivariate posterior")
-    + theme_minimal()
+    lp.ggplot(draws.to_pandas(), lp.aes("alpha", "beta"))
+    + lp.geom_density2d(bins=8, alpha=0.8)
+    + lp.geom_point(alpha=0.15, size=1.0, color="#444444")
+    + lp.labs(x="intercept (α)", y="slope (β)", title="Bivariate posterior")
+    + lp.theme_minimal()
 )
 ```
 
@@ -104,11 +79,11 @@ pred_summary = td.point_interval(
 
 ```{python}
 (
-    ggplot(draws.to_pandas(), aes("alpha", "beta"))
-    + geom_density_2d(bins=8, alpha=0.8)
-    + geom_point(alpha=0.15, size=1.0, color="#444444")
-    + labs(x="intercept (α)", y="slope (β)", title="Bivariate posterior")
-    + theme_minimal()
+    p9.ggplot(draws.to_pandas(), p9.aes("alpha", "beta"))
+    + p9.geom_density_2d(alpha=0.8)
+    + p9.geom_point(alpha=0.15, size=1.0, color="#444444")
+    + p9.labs(x="intercept (α)", y="slope (β)", title="Bivariate posterior")
+    + p9.theme_minimal()
 )
 ```
 
@@ -122,12 +97,12 @@ pred_summary = td.point_interval(
 
 ```{python}
 (
-    ggplot(pred_summary.to_pandas(), aes("x"))
-    + geom_ribbon(aes(ymin="mu_lower_0.95", ymax="mu_upper_0.95"), alpha=0.25)
-    + geom_line(aes(y="mu"), color="#2166ac", size=0.8)
-    + geom_point(aes(y="y"), data=obs.to_pandas(), alpha=0.6, size=1.5)
-    + labs(x="x", y="y", title="Predictive fit (95% ribbon)")
-    + theme_minimal()
+    lp.ggplot(pred_summary.to_pandas(), lp.aes("x"))
+    + lp.geom_ribbon(lp.aes(ymin="mu_lower_0.95", ymax="mu_upper_0.95"), alpha=0.25)
+    + lp.geom_line(lp.aes(y="mu"), color="#2166ac", size=0.8)
+    + lp.geom_point(lp.aes(y="y"), data=obs.to_pandas(), alpha=0.6, size=1.5)
+    + lp.labs(x="x", y="y", title="Predictive fit (95% ribbon)")
+    + lp.theme_minimal()
 )
 ```
 
@@ -135,12 +110,12 @@ pred_summary = td.point_interval(
 
 ```{python}
 (
-    ggplot(pred_summary.to_pandas(), aes("x"))
-    + geom_ribbon(aes(ymin="mu_lower_0.95", ymax="mu_upper_0.95"), alpha=0.25)
-    + geom_line(aes(y="mu"), color="#2166ac", size=0.8)
-    + geom_point(aes(y="y"), data=obs.to_pandas(), alpha=0.6, size=1.5)
-    + labs(x="x", y="y", title="Predictive fit (95% ribbon)")
-    + theme_minimal()
+    p9.ggplot(pred_summary.to_pandas(), p9.aes("x"))
+    + p9.geom_ribbon(p9.aes(ymin="mu_lower_0.95", ymax="mu_upper_0.95"), alpha=0.25)
+    + p9.geom_line(p9.aes(y="mu"), color="#2166ac", size=0.8)
+    + p9.geom_point(p9.aes(y="y"), data=obs.to_pandas(), alpha=0.6, size=1.5)
+    + p9.labs(x="x", y="y", title="Predictive fit (95% ribbon)")
+    + p9.theme_minimal()
 )
 ```
 
@@ -149,6 +124,8 @@ pred_summary = td.point_interval(
 ## 2. Varying intercepts
 
 One-dimensional `alpha[group]` with string coordinate labels.  Exercises `_datatree_group_to_df` with non-numeric coords and tests that forest-plot sorting/filtering works on string dims.
+
+### Use tidydraws
 
 ```{python}
 # | cache: true
@@ -165,11 +142,13 @@ forest = td.point_interval(draws, "alpha", group_by="group", probs=(0.50, 0.89))
 
 ```{python}
 (
-    ggplot(forest.to_pandas(), aes("group", "alpha"))
-    + geom_pointrange(aes(ymin="alpha_lower_0.89", ymax="alpha_upper_0.89"), size=0.8)
-    + geom_hline(yintercept=0, linetype="dashed", color="#888888")
-    + labs(x="group", y="intercept (α)", title="Varying intercepts (89% intervals)")
-    + theme_minimal()
+    lp.ggplot(forest.to_pandas(), lp.aes("group", "alpha"))
+    + lp.geom_pointrange(
+        lp.aes(ymin="alpha_lower_0.89", ymax="alpha_upper_0.89"), size=0.8
+    )
+    + lp.geom_hline(yintercept=0, linetype="dashed", color="#888888")
+    + lp.labs(x="group", y="intercept (α)", title="Varying intercepts (89% intervals)")
+    + lp.theme_minimal()
 )
 ```
 
@@ -177,11 +156,13 @@ forest = td.point_interval(draws, "alpha", group_by="group", probs=(0.50, 0.89))
 
 ```{python}
 (
-    ggplot(forest.to_pandas(), aes("group", "alpha"))
-    + geom_pointrange(aes(ymin="alpha_lower_0.89", ymax="alpha_upper_0.89"), size=0.8)
-    + geom_hline(yintercept=0, linetype="dashed", color="#888888")
-    + labs(x="group", y="intercept (α)", title="Varying intercepts (89% intervals)")
-    + theme_minimal()
+    p9.ggplot(forest.to_pandas(), p9.aes("group", "alpha"))
+    + p9.geom_pointrange(
+        p9.aes(ymin="alpha_lower_0.89", ymax="alpha_upper_0.89"), size=0.8
+    )
+    + p9.geom_hline(yintercept=0, linetype="dashed", color="#888888")
+    + p9.labs(x="group", y="intercept (α)", title="Varying intercepts (89% intervals)")
+    + p9.theme_minimal()
 )
 ```
 
@@ -207,15 +188,15 @@ Every group-level beta draw gets the corresponding chain/draw sigma value via br
 
 ```{python}
 (
-    ggplot(draws.to_pandas(), aes("sigma", "beta"))
-    + geom_point(aes(color="group"), alpha=0.35, size=2.0)
-    + labs(
+    lp.ggplot(draws.to_pandas(), lp.aes("sigma", "beta"))
+    + lp.geom_point(lp.aes(color="group"), alpha=0.35, size=2.0)
+    + lp.labs(
         x="sigma (σ)",
         y="beta (β)",
         color="group",
         title="Cross-dim broadcast: β[group] × σ",
     )
-    + theme_minimal()
+    + lp.theme_minimal()
 )
 ```
 
@@ -223,15 +204,15 @@ Every group-level beta draw gets the corresponding chain/draw sigma value via br
 
 ```{python}
 (
-    ggplot(draws.to_pandas(), aes("sigma", "beta"))
-    + geom_point(aes(color="group"), alpha=0.35, size=2.0)
-    + labs(
+    p9.ggplot(draws.to_pandas(), p9.aes("sigma", "beta"))
+    + p9.geom_point(p9.aes(color="group"), alpha=0.35, size=2.0)
+    + p9.labs(
         x="sigma (σ)",
         y="beta (β)",
         color="group",
         title="Cross-dim broadcast: β[group] × σ",
     )
-    + theme_minimal()
+    + p9.theme_minimal()
 )
 ```
 
@@ -241,6 +222,7 @@ Every group-level beta draw gets the corresponding chain/draw sigma value via br
 
 Two 1-d arrays on the same dimensions: `alpha[group]` and `beta[group]`.  `parameter_draws` joins them — exercises the same-dims multi-variable path.
 
+### Use tidydraws
 ```{python}
 # | cache: true
 dt, obs = varying_both(seed=2029)
@@ -255,16 +237,16 @@ draws = td.parameter_draws(dt, "alpha[group]", "beta[group]")
 
 ```{python}
 (
-    ggplot(draws.to_pandas(), aes("alpha", "beta"))
-    + geom_density2d(aes(color="group"), bins=5, alpha=0.7)
-    + geom_point(alpha=0.10, size=0.8)
-    + labs(
+    lp.ggplot(draws.to_pandas(), lp.aes("alpha", "beta"))
+    + lp.geom_density2d(lp.aes(color="group"), bins=5, alpha=0.7)
+    + lp.geom_point(alpha=0.10, size=0.8)
+    + lp.labs(
         x="intercept (α)",
         y="slope (β)",
         color="group",
         title="Group-level bivariate posterior",
     )
-    + theme_minimal()
+    + lp.theme_minimal()
 )
 ```
 
@@ -272,16 +254,16 @@ draws = td.parameter_draws(dt, "alpha[group]", "beta[group]")
 
 ```{python}
 (
-    ggplot(draws.to_pandas(), aes("alpha", "beta"))
-    + geom_density_2d(aes(color="group"), bins=5, alpha=0.7)
-    + geom_point(alpha=0.10, size=0.8)
-    + labs(
+    p9.ggplot(draws.to_pandas(), p9.aes("alpha", "beta"))
+    + p9.geom_density_2d(p9.aes(color="group"), alpha=0.7)
+    + p9.geom_point(alpha=0.10, size=0.8)
+    + p9.labs(
         x="intercept (α)",
         y="slope (β)",
         color="group",
         title="Group-level bivariate posterior",
     )
-    + theme_minimal()
+    + p9.theme_minimal()
 )
 ```
 
@@ -294,8 +276,15 @@ Three scalar predictors, varying intercepts per group.  `parameter_draws` extrac
 ```{python}
 # | cache: true
 dt, obs = multiple_regression(seed=2030)
-draws = td.parameter_draws(dt, "b1", "b2", "b3", "alpha[group]")
+```
 
+### Use tidydraws
+```{python}
+draws = td.parameter_draws(dt, "b1", "b2", "b3", "alpha[group]")
+```
+
+### Plot
+```{python}
 coefs = pl.concat([
     draws.select(pl.col("group"), pl.col("b1").alias("value")).with_columns(
         pl.lit("b1").alias("predictor")
@@ -320,16 +309,16 @@ coef_forest = td.point_interval(
 
 ```{python}
 (
-    ggplot(coef_forest.to_pandas(), aes("group", "value"))
-    + geom_pointrange(aes(ymin="value_lower", ymax="value_upper"), size=0.7)
-    + geom_hline(yintercept=0, linetype="dashed", color="#888888")
-    + facet_wrap(facets="predictor", ncol=3)
-    + labs(
+    lp.ggplot(coef_forest.to_pandas(), lp.aes("group", "value"))
+    + lp.geom_pointrange(lp.aes(ymin="value_lower", ymax="value_upper"), size=0.7)
+    + lp.geom_hline(yintercept=0, linetype="dashed", color="#888888")
+    + lp.facet_wrap(facets="predictor", ncol=3)
+    + lp.labs(
         x="group",
         y="coefficient",
         title="Multiple regression coefficients (89% intervals)",
     )
-    + theme_minimal()
+    + lp.theme_minimal()
 )
 ```
 
@@ -337,16 +326,16 @@ coef_forest = td.point_interval(
 
 ```{python}
 (
-    ggplot(coef_forest.to_pandas(), aes("group", "value"))
-    + geom_pointrange(aes(ymin="value_lower", ymax="value_upper"), size=0.7)
-    + geom_hline(yintercept=0, linetype="dashed", color="#888888")
-    + facet_wrap("~predictor", ncol=3)
-    + labs(
+    p9.ggplot(coef_forest.to_pandas(), p9.aes("group", "value"))
+    + p9.geom_pointrange(p9.aes(ymin="value_lower", ymax="value_upper"), size=0.7)
+    + p9.geom_hline(yintercept=0, linetype="dashed", color="#888888")
+    + p9.facet_wrap("~predictor", ncol=3)
+    + p9.labs(
         x="group",
         y="coefficient",
         title="Multiple regression coefficients (89% intervals)",
     )
-    + theme_minimal()
+    + p9.theme_minimal()
 )
 ```
 
@@ -359,8 +348,14 @@ Bernoulli outcome with group-level intercepts.  Predictions are computed directl
 ```{python}
 # | cache: true
 dt, obs, grid = logistic(seed=2031)
-draws = td.parameter_draws(dt, "alpha[group]", "beta")
+```
 
+### Use tidydraws
+```{python}
+draws = td.parameter_draws(dt, "alpha[group]", "beta")
+```
+
+```{python}
 # Compute predictions: join draws with grid, then logit_p → p
 pred_draws = draws.join(grid.select(["obs_ind", "group", "x"]), on="group")
 pred_draws = pred_draws.with_columns(
@@ -376,29 +371,29 @@ pred_summary = td.point_interval(
 
 ```{python}
 (
-    ggplot(
+    lp.ggplot(
         pred_summary.to_pandas(),
-        aes("x"),
+        lp.aes("x"),
     )
-    + geom_ribbon(
-        aes(ymin="p_lower_0.95", ymax="p_upper_0.95", fill="group"), alpha=0.25
+    + lp.geom_ribbon(
+        lp.aes(ymin="p_lower_0.95", ymax="p_upper_0.95", fill="group"), alpha=0.25
     )
-    + geom_line(aes(y="p", color="group"), size=0.8)
-    + geom_jitter(
-        aes(y="y"),
+    + lp.geom_line(lp.aes(y="p", color="group"), size=0.8)
+    + lp.geom_jitter(
+        lp.aes(y="y"),
         data=obs.with_columns(pl.col("y").cast(pl.Float64)).to_pandas(),
         alpha=0.5,
         height=0.02,
         size=1.5,
     )
-    + labs(
+    + lp.labs(
         x="x",
         y="P(y=1)",
         color="group",
         fill="group",
         title="Logistic: probability ribbon + observed 0/1",
     )
-    + theme_minimal()
+    + lp.theme_minimal()
 )
 ```
 
@@ -406,29 +401,29 @@ pred_summary = td.point_interval(
 
 ```{python}
 (
-    ggplot(
+    p9.ggplot(
         pred_summary.to_pandas(),
-        aes("x"),
+        p9.aes("x"),
     )
-    + geom_ribbon(
-        aes(ymin="p_lower_0.95", ymax="p_upper_0.95", fill="group"), alpha=0.25
+    + p9.geom_ribbon(
+        p9.aes(ymin="p_lower_0.95", ymax="p_upper_0.95", fill="group"), alpha=0.25
     )
-    + geom_line(aes(y="p", color="group"), size=0.8)
-    + geom_jitter(
-        aes(y="y"),
+    + p9.geom_line(p9.aes(y="p", color="group"), size=0.8)
+    + p9.geom_jitter(
+        p9.aes(y="y"),
         data=obs.with_columns(pl.col("y").cast(pl.Float64)).to_pandas(),
         alpha=0.5,
         height=0.02,
         size=1.5,
     )
-    + labs(
+    + p9.labs(
         x="x",
         y="P(y=1)",
         color="group",
         fill="group",
         title="Logistic: probability ribbon + observed 0/1",
     )
-    + theme_minimal()
+    + p9.theme_minimal()
 )
 ```
 
@@ -452,13 +447,13 @@ compare = td.compare_draws(dt, "beta[group]", groups=["prior", "posterior"])
 
 ```{python}
 (
-    ggplot(compare.to_pandas(), aes("beta", fill="source"))
-    + geom_density(alpha=0.45)
-    + facet_wrap(facets="group", ncol=2)
-    + labs(
+    lp.ggplot(compare.to_pandas(), lp.aes("beta", fill="source"))
+    + lp.geom_density(alpha=0.45)
+    + lp.facet_wrap(facets="group", ncol=2)
+    + lp.labs(
         x="beta (β)", y="density", fill="source", title="Prior vs posterior by group"
     )
-    + theme_minimal()
+    + lp.theme_minimal()
 )
 ```
 
@@ -466,13 +461,13 @@ compare = td.compare_draws(dt, "beta[group]", groups=["prior", "posterior"])
 
 ```{python}
 (
-    ggplot(compare.to_pandas(), aes("beta", fill="source"))
-    + geom_density(alpha=0.45)
-    + facet_wrap("~group", ncol=2)
-    + labs(
+    p9.ggplot(compare.to_pandas(), p9.aes("beta", fill="source"))
+    + p9.geom_density(alpha=0.45)
+    + p9.facet_wrap("~group", ncol=2)
+    + p9.labs(
         x="beta (β)", y="density", fill="source", title="Prior vs posterior by group"
     )
-    + theme_minimal()
+    + p9.theme_minimal()
 )
 ```
 
@@ -496,14 +491,14 @@ draws = td.parameter_draws(dt, "alpha", "beta", "sigma")
 
 ```{python}
 (
-    ggplot(draws.to_pandas(), aes("beta"))
-    + geom_density(fill="#2166ac", alpha=0.5, color="#2166ac")
-    + labs(
+    lp.ggplot(draws.to_pandas(), lp.aes("beta"))
+    + lp.geom_density(fill="#2166ac", alpha=0.5, color="#2166ac")
+    + lp.labs(
         x="beta (β)",
         y="density",
         title=f"Single chain: {draws.select(pl.col('chain').n_unique()).item()} chain × {draws.select(pl.col('draw').n_unique()).item()} draws",
     )
-    + theme_minimal()
+    + lp.theme_minimal()
 )
 ```
 
@@ -511,14 +506,14 @@ draws = td.parameter_draws(dt, "alpha", "beta", "sigma")
 
 ```{python}
 (
-    ggplot(draws.to_pandas(), aes("beta"))
-    + geom_density(fill="#2166ac", alpha=0.5, color="#2166ac")
-    + labs(
+    p9.ggplot(draws.to_pandas(), p9.aes("beta"))
+    + p9.geom_density(fill="#2166ac", alpha=0.5, color="#2166ac")
+    + p9.labs(
         x="beta (β)",
         y="density",
         title=f"Single chain: {draws.select(pl.col('chain').n_unique()).item()} chain × {draws.select(pl.col('draw').n_unique()).item()} draws",
     )
-    + theme_minimal()
+    + p9.theme_minimal()
 )
 ```
 
