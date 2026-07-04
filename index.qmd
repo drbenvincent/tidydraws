@@ -238,6 +238,7 @@ fig
 
 ```{python}
 # | fig-cap: "Posterior forest plot, density, prior vs posterior, and predictive fit via Altair."
+alt.data_transformers.enable("vegafusion")
 # Forest plot
 alt_forest = (
     alt

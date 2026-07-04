@@ -33,6 +33,7 @@ dependencies = [
     "xarray",
     "numpy",
     "pyarrow>=24.0.0",
+    "vegafusion-python-embed>=1.6",
 ]
 
 [project.optional-dependencies]
@@ -45,6 +46,8 @@ plotnine = [
 ]
 altair = [
     "altair>=6.2.2",
+    "vegafusion>=2.0",
+    "vegafusion-python-embed>=1.6",
 ]
 all = [
     "tidydraws[letsplot]",
@@ -63,6 +66,8 @@ dev = [
     "great-docs>=0.14.0",
     "plotnine",
     "altair>=6.2.2",
+    "vegafusion>=2.0.3",
+    "vegafusion-python-embed>=1.6",
 ]
 
 [project.urls]
@@ -83,6 +88,7 @@ dev = [
     "pymc>=6.0.1",
     "pytest-cov>=7.1.0",
     "altair>=6.2.2",
+    "vegafusion>=2.0.3",
 ]
 
 [tool.ruff]
