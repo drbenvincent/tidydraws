@@ -167,6 +167,7 @@ The dashed red lines are the true slopes used to simulate the data.
 
 Summarise each group with one central 89% interval. The red points are the true slopes used to generate the observed data.
 
+```{python}
 beta_forest = td.point_interval(beta_df, "beta", group_by="groups", probs=(0.89,))
 ```
 
@@ -299,9 +300,9 @@ contrast_draws = pl.concat([
     )
     for group_name in group_levels
     if group_name != reference_group
+])
 contrast_forest = td.point_interval(
     contrast_draws, "contrast", group_by="contrast_name", probs=(0.89,)
-)
 )
 reference_truth = truth.filter(pl.col("groups") == reference_group).get_column(
     "beta_true"
