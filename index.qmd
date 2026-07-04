@@ -25,6 +25,9 @@ import sys
 
 import lets_plot as lp
 import plotnine as p9
+import seaborn as sns
+import seaborn.objects as so
+from matplotlib.figure import Figure
 import polars as pl
 import pymc as pm
 import tidydraws as td
@@ -173,6 +176,61 @@ p9_pred = (
 (p9_forest | p9_density) / (p9_compare | p9_pred)
 ```
 
+
+#### seaborn
+
+```{python}
+# | fig-cap: "Posterior forest plot, density, prior vs posterior, and predictive fit via seaborn objects."
+so.Plot.config.theme.update(sns.axes_style("whitegrid"))
+
+fig = Figure(figsize=(8, 6))
+(sf1, sf2), (sf3, sf4) = fig.subfigures(2, 2)
+
+# Forest plot
+(
+    so
+    .Plot(beta_summary.to_pandas(), x="groups")
+    .add(so.Range(alpha=0.7), ymin="beta_lower", ymax="beta_upper")
+    .add(so.Dot(color="steelblue"), y="beta")
+    .label(x="group", y="beta", title="Forest plot")
+    .on(sf1)
+    .plot()
+)
+
+# Density
+(
+    so
+    .Plot(beta_df.to_pandas(), x="beta", color="groups")
+    .add(so.Area(alpha=0.5), so.KDE(common_norm=False))
+    .label(x="beta", y="density", title="Posterior density")
+    .on(sf2)
+    .plot()
+)
+
+# Prior vs posterior
+(
+    so
+    .Plot(compare.to_pandas(), x="beta", color="source")
+    .facet(col="groups", wrap=2)
+    .add(so.Area(alpha=0.5), so.KDE(common_norm=False))
+    .label(x="beta", y="density", title="Prior vs posterior")
+    .on(sf3)
+    .plot()
+)
+
+# Predictive fit
+(
+    so
+    .Plot(pred_summary.to_pandas(), x="x", color="group")
+    .add(so.Band(alpha=0.25), ymin="mu_lower", ymax="mu_upper")
+    .add(so.Line(), y="mu")
+    .label(x="x", y="mu", title="Predictive fit")
+    .on(sf4)
+    .plot()
+)
+
+fig
+```
 ::::
 
 
