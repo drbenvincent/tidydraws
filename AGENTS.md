@@ -4,6 +4,7 @@
 
 tidydraws is a tidybayes-inspired data layer for Bayesian visualisation in Python. It extracts MCMC draws from ArviZ 1.0 DataTrees into tidy Polars DataFrames. This file holds the hard rules, signatures, and design rationale for agents working in the repo.
 
+* Temporary files should be placed in .scratch/ and ignored by git. Do not commit or push scratch files.
 ---
 
 ## Hard Rules (never violate)
@@ -80,7 +81,6 @@ def compare_draws(
 
 ### Core helpers (in `_extract.py`)
 
-- `_parse_var_spec(spec)` → `("beta", ["groups"])`; raise on malformed specs (`"beta["`, `"beta]"`, `"beta[]"`).
 - `_datatree_group_to_df(dt, group)` → `pl.DataFrame` with chain, draw, and all coord columns.
 - `_align_dims(frames)` → inner-join same-dim frames; cross-join different-dim frames with a logged warning.
 - `_coerce_to_dataframe(newdata)` → `pl.DataFrame` from `pl.DataFrame` / `pd.DataFrame`.
@@ -90,8 +90,7 @@ def compare_draws(
 ## Common Pitfalls
 
 - Returning `pl.LazyFrame` or leaving a `.lazy()` / `.collect()` round-trip in the extraction path — the data layer is eager by design.
-- Parser not splitting nested dims on `,` inside brackets.
-- Confusing dimension names with coordinate names in xarray.
+- Confusing dimension names with coordinate names in xarray — the DataArray already knows its dims, so auto-detection gets this right.
 - Forgetting groups are accessed via `.children[group].to_dataset()`.
 - Running `pytest`/`python` without `uv run` (wrong environment).
 

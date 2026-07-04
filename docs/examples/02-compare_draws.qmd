@@ -90,7 +90,7 @@ dt
 One call stacks both sources:
 
 ```{python}
-compare = td.compare_draws(dt, "beta[groups]")
+compare = td.compare_draws(dt, "beta")
 compare.head()
 ```
 
