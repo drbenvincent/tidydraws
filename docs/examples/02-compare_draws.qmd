@@ -31,6 +31,19 @@ from lets_plot import (
     labs,
     position_dodge,
 )
+from plotnine import (
+    aes,
+    facet_wrap,
+    geom_density,
+    geom_hline,
+    geom_pointrange,
+    geom_vline,
+    ggplot,
+    labs,
+    position_dodge,
+    theme_minimal,
+)
+
 
 for parent in [Path.cwd(), *Path.cwd().parents]:
     helper_dir = parent / "docs" / "examples"
@@ -107,6 +120,10 @@ compare.head()
 
 The prior is deliberately broad; after seeing the data, the posterior concentrates around the group-specific slopes.
 
+::: {.panel-tabset}
+
+#### lets-plot
+
 ```{python}
 # | fig-cap: "Prior vs posterior density of group-specific slopes, pooled across groups."
 (
@@ -123,7 +140,31 @@ The prior is deliberately broad; after seeing the data, the posterior concentrat
 )
 ```
 
+#### plotnine
+
+```{python}
+# | fig-cap: "Prior vs posterior density of group-specific slopes, pooled across groups."
+(
+    ggplot(compare.to_pandas(), aes("beta", fill="source"))
+    + geom_density(alpha=0.5)
+    + geom_vline(
+        data=truth.to_pandas(),
+        mapping=aes(xintercept="beta_true"),
+        color="firebrick",
+        linetype="dashed",
+        size=0.7,
+    )
+    + labs(x="beta", y="density", fill="source", title="Prior vs posterior slopes")
+)
+```
+
+:::
+
 ### Prior vs posterior by group
+
+::: {.panel-tabset}
+
+#### lets-plot
 
 ```{python}
 # | fig-cap: "Prior vs posterior density of group-specific slopes, faceted by group."
@@ -142,14 +183,41 @@ The prior is deliberately broad; after seeing the data, the posterior concentrat
 )
 ```
 
+#### plotnine
+
+```{python}
+# | fig-cap: "Prior vs posterior density of group-specific slopes, faceted by group."
+(
+    ggplot(compare.to_pandas(), aes("beta", fill="source"))
+    + geom_density(alpha=0.5)
+    + geom_vline(
+        data=truth.to_pandas(),
+        mapping=aes(xintercept="beta_true"),
+        color="firebrick",
+        linetype="dashed",
+        size=0.7,
+    )
+    + facet_wrap("~groups", ncol=2)
+    + labs(x="beta", y="density", fill="source", title="Prior vs posterior by group")
+)
+```
+
+:::
+
 ### Credible-interval comparison
 
 A different cut: 89% intervals per group, dodged by source. The posterior intervals contract toward the true slopes while the prior intervals remain wide.
 
 ```{python}
-# | fig-cap: "Prior vs posterior 89% credible intervals of group-specific slopes."
 ci = td.point_interval(compare, "beta", group_by=["groups", "source"], probs=(0.89,))
+```
 
+::: {.panel-tabset}
+
+#### lets-plot
+
+```{python}
+# | fig-cap: "Prior vs posterior 89% credible intervals of group-specific slopes."
 (
     ggplot(ci.to_pandas(), aes("groups", "beta", color="source"))
     + geom_pointrange(
@@ -172,5 +240,34 @@ ci = td.point_interval(compare, "beta", group_by=["groups", "source"], probs=(0.
     )
 )
 ```
+
+#### plotnine
+
+```{python}
+# | fig-cap: "Prior vs posterior 89% credible intervals of group-specific slopes."
+(
+    ggplot(ci.to_pandas(), aes("groups", "beta", color="source"))
+    + geom_pointrange(
+        aes(ymin="beta_lower", ymax="beta_upper"),
+        position=position_dodge(0.5),
+        size=0.8,
+    )
+    + geom_pointrange(
+        data=truth.to_pandas(),
+        mapping=aes("groups", "beta_true", ymin="beta_true", ymax="beta_true"),
+        color="firebrick",
+        size=0.7,
+    )
+    + geom_hline(yintercept=0, linetype="dashed", color="#888888")
+    + labs(
+        x="group",
+        y="beta (89% CrI)",
+        color="source",
+        title="Prior vs posterior credible intervals",
+    )
+)
+```
+
+:::
 
 `group_name` sets the source column's name, and `groups` can compare other `DataTree` groups when needed. Next, join posterior expectations to covariates with [`prediction_draws()`](prediction_draws.qmd).
