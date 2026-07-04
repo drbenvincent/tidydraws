@@ -21,16 +21,8 @@ import sys
 import polars as pl
 import pymc as pm
 import tidydraws as td
-from lets_plot import (
-    LetsPlot,
-    aes,
-    as_discrete,
-    geom_line,
-    geom_point,
-    geom_ribbon,
-    ggplot,
-    labs,
-)
+import lets_plot as lp
+import plotnine as p9
 
 for parent in [Path.cwd(), *Path.cwd().parents]:
     helper_dir = parent / "docs" / "examples"
@@ -41,7 +33,7 @@ for parent in [Path.cwd(), *Path.cwd().parents]:
 from tidydraws import point_interval
 from _pymc_workflow import simulate_grouped_regression
 
-LetsPlot.setup_html()
+lp.LetsPlot.setup_html()
 
 workflow = simulate_grouped_regression(seed=2026)
 observed = workflow.observed
@@ -96,6 +88,8 @@ with pm.Model(coords=coords) as model:
 dt
 ```
 
+## Use tidydraws
+
 One call joins `mu` to the observed covariates and responses:
 
 ```{python}
@@ -105,15 +99,14 @@ pred.head()
 
 Note the columns: `chain`, `draw`, `obs_ind`, `mu`, `groups`, `group_idx`, `x`, `mu_true`, and `y`. No `beta`, no `intercept` — parameters stay in their own frame.
 
-## Gallery
+## Plotting
 
 ### Posterior expected fit by group
 
 Summarise `mu` per observation with 50%, 80%, and 95% intervals, then draw nested ribbons, a median line, the true generating line, and the raw observed `y` values.
 
 ```{python}
-# | fig-cap: "Posterior expected fit by group with nested credible ribbons, true lines, and observed data."
-summary = point_interval(
+summary = td.point_interval(
     pred,
     "mu",
     group_by=["obs_ind", "x", "groups", "mu_true", "y"],
@@ -123,56 +116,63 @@ fit_median = summary
 observed_points = (
     summary.select("x", "y", "groups", "mu_true").unique().sort(["groups", "x"])
 )
+```
 
+:::: {.panel-tabset}
+
+#### lets-plot
+
+```{python}
+# | fig-cap: "Posterior expected fit by group with nested credible ribbons, true lines, and observed data."
 (
-    ggplot(summary.to_pandas(), aes("x"))
-    + geom_ribbon(
-        mapping=aes(
+    lp.ggplot(summary.to_pandas(), lp.aes("x"))
+    + lp.geom_ribbon(
+        mapping=lp.aes(
             ymin="mu_lower_0.95",
             ymax="mu_upper_0.95",
-            fill=as_discrete("groups"),
+            fill=lp.as_discrete("groups"),
             group="groups",
         ),
         alpha=0.10,
         color="transparent",
     )
-    + geom_ribbon(
-        mapping=aes(
+    + lp.geom_ribbon(
+        mapping=lp.aes(
             ymin="mu_lower_0.80",
             ymax="mu_upper_0.80",
-            fill=as_discrete("groups"),
+            fill=lp.as_discrete("groups"),
             group="groups",
         ),
         alpha=0.18,
         color="transparent",
     )
-    + geom_ribbon(
-        mapping=aes(
+    + lp.geom_ribbon(
+        mapping=lp.aes(
             ymin="mu_lower_0.50",
             ymax="mu_upper_0.50",
-            fill=as_discrete("groups"),
+            fill=lp.as_discrete("groups"),
             group="groups",
         ),
         alpha=0.28,
         color="transparent",
     )
-    + geom_line(
-        mapping=aes(y="mu", color=as_discrete("groups")),
+    + lp.geom_line(
+        mapping=lp.aes(y="mu", color=lp.as_discrete("groups")),
         size=0.9,
     )
-    + geom_line(
+    + lp.geom_line(
         data=observed_points.to_pandas(),
-        mapping=aes(y="mu_true", color=as_discrete("groups")),
+        mapping=lp.aes(y="mu_true", color=lp.as_discrete("groups")),
         linetype="dashed",
         size=0.8,
     )
-    + geom_point(
+    + lp.geom_point(
         data=observed_points.to_pandas(),
-        mapping=aes(y="y", color=as_discrete("groups")),
+        mapping=lp.aes(y="y", color=lp.as_discrete("groups")),
         size=1.8,
         alpha=0.6,
     )
-    + labs(
+    + lp.labs(
         x="x",
         y="mu / y",
         color="group",
@@ -182,73 +182,139 @@ observed_points = (
 )
 ```
 
+#### plotnine
+
+```{python}
+(
+    p9.ggplot(summary.to_pandas(), p9.aes("x"))
+    + p9.geom_ribbon(
+        mapping=p9.aes(
+            ymin="mu_lower_0.95",
+            ymax="mu_upper_0.95",
+            fill="groups",
+            group="groups",
+        ),
+        alpha=0.10,
+    )
+    + p9.geom_ribbon(
+        mapping=p9.aes(
+            ymin="mu_lower_0.80",
+            ymax="mu_upper_0.80",
+            fill="groups",
+            group="groups",
+        ),
+        alpha=0.18,
+    )
+    + p9.geom_ribbon(
+        mapping=p9.aes(
+            ymin="mu_lower_0.50",
+            ymax="mu_upper_0.50",
+            fill="groups",
+            group="groups",
+        ),
+        alpha=0.28,
+    )
+    + p9.geom_line(
+        mapping=p9.aes(y="mu", color="groups"),
+        size=0.9,
+    )
+    + p9.geom_line(
+        data=observed_points.to_pandas(),
+        mapping=p9.aes(y="mu_true", color="groups"),
+        linetype="dashed",
+        size=0.8,
+    )
+    + p9.geom_point(
+        data=observed_points.to_pandas(),
+        mapping=p9.aes(y="y", color="groups"),
+        size=1.8,
+        alpha=0.6,
+    )
+    + p9.labs(
+        x="x",
+        y="mu / y",
+        color="group",
+        fill="group",
+        title="Posterior expected fit with observed data",
+    )
+)
+```
+
+::::
+
 ### Posterior predicted fit by group
 
 The same interval plot, now using posterior predictive draws of the observed outcome $y$ rather than the posterior expectation $\mu$. Because $y$ includes the observation noise ($\sigma$), the intervals are wider — they represent the distribution of *new data*, not the mean.
 
 ```{python}
 # | code-fold: true
-# | fig-cap: "Posterior predicted fit by group with nested credible intervals, true lines, and observed data."
 pred_y = td.prediction_draws(dt, newdata=observed, var_name="y").rename({
     "y_right": "y_obs"
 })
 
-summary_y = point_interval(
+summary_y = td.point_interval(
     pred_y,
     "y",
     group_by=["obs_ind", "x", "groups", "mu_true", "y_obs"],
     probs=(0.50, 0.80, 0.95),
 ).sort(["groups", "x"])
+```
 
+:::: {.panel-tabset}
+
+#### lets-plot
+
+```{python}
+# | fig-cap: "Posterior predicted fit by group with nested credible intervals, true lines, and observed data."
 (
-    ggplot(summary_y.to_pandas(), aes("x"))
-    + geom_ribbon(
-        mapping=aes(
+    lp.ggplot(summary_y.to_pandas(), lp.aes("x"))
+    + lp.geom_ribbon(
+        mapping=lp.aes(
             ymin="y_lower_0.95",
             ymax="y_upper_0.95",
-            fill=as_discrete("groups"),
+            fill=lp.as_discrete("groups"),
             group="groups",
         ),
         alpha=0.10,
         color="transparent",
     )
-    + geom_ribbon(
-        mapping=aes(
+    + lp.geom_ribbon(
+        mapping=lp.aes(
             ymin="y_lower_0.80",
             ymax="y_upper_0.80",
-            fill=as_discrete("groups"),
+            fill=lp.as_discrete("groups"),
             group="groups",
         ),
         alpha=0.18,
         color="transparent",
     )
-    + geom_ribbon(
-        mapping=aes(
+    + lp.geom_ribbon(
+        mapping=lp.aes(
             ymin="y_lower_0.50",
             ymax="y_upper_0.50",
-            fill=as_discrete("groups"),
+            fill=lp.as_discrete("groups"),
             group="groups",
         ),
         alpha=0.28,
         color="transparent",
     )
-    + geom_line(
-        mapping=aes(y="y", color=as_discrete("groups")),
+    + lp.geom_line(
+        mapping=lp.aes(y="y", color=lp.as_discrete("groups")),
         size=0.9,
     )
-    + geom_line(
+    + lp.geom_line(
         data=observed_points.to_pandas(),
-        mapping=aes(y="mu_true", color=as_discrete("groups")),
+        mapping=lp.aes(y="mu_true", color=lp.as_discrete("groups")),
         linetype="dashed",
         size=0.8,
     )
-    + geom_point(
+    + lp.geom_point(
         data=observed_points.to_pandas(),
-        mapping=aes(y="y", color=as_discrete("groups")),
+        mapping=lp.aes(y="y", color=lp.as_discrete("groups")),
         size=1.8,
         alpha=0.6,
     )
-    + labs(
+    + lp.labs(
         x="x",
         y="y",
         color="group",
@@ -258,53 +324,157 @@ summary_y = point_interval(
 )
 ```
 
+#### plotnine
+
+```{python}
+(
+    p9.ggplot(summary_y.to_pandas(), p9.aes("x"))
+    + p9.geom_ribbon(
+        mapping=p9.aes(
+            ymin="y_lower_0.95",
+            ymax="y_upper_0.95",
+            fill="groups",
+            group="groups",
+        ),
+        alpha=0.10,
+    )
+    + p9.geom_ribbon(
+        mapping=p9.aes(
+            ymin="y_lower_0.80",
+            ymax="y_upper_0.80",
+            fill="groups",
+            group="groups",
+        ),
+        alpha=0.18,
+    )
+    + p9.geom_ribbon(
+        mapping=p9.aes(
+            ymin="y_lower_0.50",
+            ymax="y_upper_0.50",
+            fill="groups",
+            group="groups",
+        ),
+        alpha=0.28,
+    )
+    + p9.geom_line(
+        mapping=p9.aes(y="y", color="groups"),
+        size=0.9,
+    )
+    + p9.geom_line(
+        data=observed_points.to_pandas(),
+        mapping=p9.aes(y="mu_true", color="groups"),
+        linetype="dashed",
+        size=0.8,
+    )
+    + p9.geom_point(
+        data=observed_points.to_pandas(),
+        mapping=p9.aes(y="y", color="groups"),
+        size=1.8,
+        alpha=0.6,
+    )
+    + p9.labs(
+        x="x",
+        y="y",
+        color="group",
+        fill="group",
+        title="Posterior predicted fit with observed data",
+    )
+)
+```
+
+::::
+
 ### Group-specific panels
 
 Faceting is optional; the tidy frame already contains the group label needed by any plotting backend.
 
+:::: {.panel-tabset}
+
+#### lets-plot
+
 ```{python}
 # | fig-cap: "Posterior expected fit faceted by group."
-from lets_plot import facet_wrap
-
 (
-    ggplot(summary.to_pandas(), aes("x"))
-    + geom_ribbon(
-        mapping=aes(ymin="mu_lower_0.95", ymax="mu_upper_0.95", group="groups"),
+    lp.ggplot(summary.to_pandas(), lp.aes("x"))
+    + lp.geom_ribbon(
+        mapping=lp.aes(ymin="mu_lower_0.95", ymax="mu_upper_0.95", group="groups"),
         fill="steelblue",
         alpha=0.10,
         color="transparent",
     )
-    + geom_ribbon(
-        mapping=aes(ymin="mu_lower_0.80", ymax="mu_upper_0.80", group="groups"),
+    + lp.geom_ribbon(
+        mapping=lp.aes(ymin="mu_lower_0.80", ymax="mu_upper_0.80", group="groups"),
         fill="steelblue",
         alpha=0.18,
         color="transparent",
     )
-    + geom_ribbon(
-        mapping=aes(ymin="mu_lower_0.50", ymax="mu_upper_0.50", group="groups"),
+    + lp.geom_ribbon(
+        mapping=lp.aes(ymin="mu_lower_0.50", ymax="mu_upper_0.50", group="groups"),
         fill="steelblue",
         alpha=0.28,
         color="transparent",
     )
-    + geom_line(mapping=aes(y="mu"), color="navy", size=0.8)
-    + geom_line(
+    + lp.geom_line(mapping=lp.aes(y="mu"), color="navy", size=0.8)
+    + lp.geom_line(
         data=observed_points.to_pandas(),
-        mapping=aes(y="mu_true"),
+        mapping=lp.aes(y="mu_true"),
         color="firebrick",
         linetype="dashed",
         size=0.8,
     )
-    + geom_point(
+    + lp.geom_point(
         data=observed_points.to_pandas(),
-        mapping=aes(y="y"),
+        mapping=lp.aes(y="y"),
         color="black",
         size=1.6,
         alpha=0.55,
     )
-    + facet_wrap(facets="groups", ncol=2)
-    + labs(x="x", y="mu / y", title="Each group's fitted relationship")
+    + lp.facet_wrap(facets="groups", ncol=2)
+    + lp.labs(x="x", y="mu / y", title="Each group's fitted relationship")
 )
 ```
+
+#### plotnine
+
+```{python}
+(
+    p9.ggplot(summary.to_pandas(), p9.aes("x"))
+    + p9.geom_ribbon(
+        mapping=p9.aes(ymin="mu_lower_0.95", ymax="mu_upper_0.95", group="groups"),
+        fill="steelblue",
+        alpha=0.10,
+    )
+    + p9.geom_ribbon(
+        mapping=p9.aes(ymin="mu_lower_0.80", ymax="mu_upper_0.80", group="groups"),
+        fill="steelblue",
+        alpha=0.18,
+    )
+    + p9.geom_ribbon(
+        mapping=p9.aes(ymin="mu_lower_0.50", ymax="mu_upper_0.50", group="groups"),
+        fill="steelblue",
+        alpha=0.28,
+    )
+    + p9.geom_line(mapping=p9.aes(y="mu"), color="navy", size=0.8)
+    + p9.geom_line(
+        data=observed_points.to_pandas(),
+        mapping=p9.aes(y="mu_true"),
+        color="firebrick",
+        linetype="dashed",
+        size=0.8,
+    )
+    + p9.geom_point(
+        data=observed_points.to_pandas(),
+        mapping=p9.aes(y="y"),
+        color="black",
+        size=1.6,
+        alpha=0.55,
+    )
+    + p9.facet_wrap("~groups", ncol=2)
+    + p9.labs(x="x", y="mu / y", title="Each group's fitted relationship")
+)
+```
+
+::::
 
 ### Spaghetti posterior expectation lines
 
@@ -328,23 +498,51 @@ spaghetti = (
     )
     .sort(["curve", "x"])
 )
+```
 
+:::: {.panel-tabset}
+
+#### lets-plot
+
+```{python}
 (
-    ggplot(spaghetti.to_pandas(), aes("x"))
-    + geom_line(
-        aes(y="mu", group="curve", color=as_discrete("groups")), alpha=0.10, size=0.5
+    lp.ggplot(spaghetti.to_pandas(), lp.aes("x"))
+    + lp.geom_line(
+        lp.aes(y="mu", group="curve", color=lp.as_discrete("groups")),
+        alpha=0.10,
+        size=0.5,
     )
-    + geom_point(
+    + lp.geom_point(
         data=observed_points.to_pandas(),
-        mapping=aes(y="y", color=as_discrete("groups")),
+        mapping=lp.aes(y="y", color=lp.as_discrete("groups")),
         size=1.7,
         alpha=0.55,
     )
-    + labs(
+    + lp.labs(
         x="x", y="mu / y", color="group", title="Individual posterior expectation lines"
     )
 )
 ```
+
+#### plotnine
+
+```{python}
+(
+    p9.ggplot(spaghetti.to_pandas(), p9.aes("x"))
+    + p9.geom_line(p9.aes(y="mu", group="curve", color="groups"), alpha=0.10, size=0.5)
+    + p9.geom_point(
+        data=observed_points.to_pandas(),
+        mapping=p9.aes(y="y", color="groups"),
+        size=1.7,
+        alpha=0.55,
+    )
+    + p9.labs(
+        x="x", y="mu / y", color="group", title="Individual posterior expectation lines"
+    )
+)
+```
+
+::::
 
 ### Filter before plotting
 
@@ -355,23 +553,48 @@ Subset with `.filter()` before summarising — useful when the full prediction s
 west = td.prediction_draws(dt, newdata=observed, var_name="mu").filter(
     pl.col("groups") == "West"
 )
-s_west = point_interval(
+s_west = td.point_interval(
     west, "mu", group_by=["obs_ind", "x", "y", "mu_true"], probs=(0.89,)
 ).sort("x")
+```
 
+:::: {.panel-tabset}
+
+#### lets-plot
+
+```{python}
 (
-    ggplot(s_west.to_pandas(), aes("x"))
-    + geom_ribbon(
-        aes(ymin="mu_lower", ymax="mu_upper"),
+    lp.ggplot(s_west.to_pandas(), lp.aes("x"))
+    + lp.geom_ribbon(
+        lp.aes(ymin="mu_lower", ymax="mu_upper"),
         fill="steelblue",
         alpha=0.3,
         color="transparent",
     )
-    + geom_line(aes(y="mu"), color="navy", size=0.9)
-    + geom_line(aes(y="mu_true"), color="firebrick", linetype="dashed", size=0.8)
-    + geom_point(aes(y="y"), color="black", size=1.6, alpha=0.5)
-    + labs(x="x", y="mu / y", title="West fit with observed data")
+    + lp.geom_line(lp.aes(y="mu"), color="navy", size=0.9)
+    + lp.geom_line(lp.aes(y="mu_true"), color="firebrick", linetype="dashed", size=0.8)
+    + lp.geom_point(lp.aes(y="y"), color="black", size=1.6, alpha=0.5)
+    + lp.labs(x="x", y="mu / y", title="West fit with observed data")
 )
 ```
+
+#### plotnine
+
+```{python}
+(
+    p9.ggplot(s_west.to_pandas(), p9.aes("x"))
+    + p9.geom_ribbon(
+        p9.aes(ymin="mu_lower", ymax="mu_upper"),
+        fill="steelblue",
+        alpha=0.3,
+    )
+    + p9.geom_line(p9.aes(y="mu"), color="navy", size=0.9)
+    + p9.geom_line(p9.aes(y="mu_true"), color="firebrick", linetype="dashed", size=0.8)
+    + p9.geom_point(p9.aes(y="y"), color="black", size=1.6, alpha=0.5)
+    + p9.labs(x="x", y="mu / y", title="West fit with observed data")
+)
+```
+
+::::
 
 See [`parameter_draws()`](parameter_draws.qmd) for parameter space, or [`compare_draws()`](compare_draws.qmd) for prior vs posterior.
