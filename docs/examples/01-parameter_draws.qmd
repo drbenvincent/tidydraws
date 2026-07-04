@@ -115,7 +115,7 @@ beta_df = td.parameter_draws(dt, "beta[groups]", "intercept[groups]")
 beta_df.head()
 ```
 
-## Gallery
+## Plotting
 
 ### Posterior density by group
 

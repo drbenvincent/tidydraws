@@ -94,7 +94,7 @@ compare = td.compare_draws(dt, "beta[groups]")
 compare.head()
 ```
 
-## Gallery
+## Plotting
 
 ### Prior vs posterior (pooled)
 

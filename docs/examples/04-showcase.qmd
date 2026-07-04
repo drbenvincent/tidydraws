@@ -175,6 +175,10 @@ Extracts `beta[group]` (1-d) and scalar `sigma` together.  `sigma` is broadcast 
 ```{python}
 # | cache: true
 dt, obs = varying_slopes(seed=2028)
+```
+
+### Use tidydraws
+```{python}
 draws = td.parameter_draws(dt, "beta[group]", "sigma")
 ```
 
@@ -281,10 +285,7 @@ dt, obs = multiple_regression(seed=2030)
 ### Use tidydraws
 ```{python}
 draws = td.parameter_draws(dt, "b1", "b2", "b3", "alpha[group]")
-```
 
-### Plot
-```{python}
 coefs = pl.concat([
     draws.select(pl.col("group"), pl.col("b1").alias("value")).with_columns(
         pl.lit("b1").alias("predictor")
@@ -436,6 +437,10 @@ pred_summary = td.point_interval(
 ```{python}
 # | cache: true
 dt, _obs = varying_slopes(seed=2028)  # same seed as §3 — already has prior
+```
+
+### Use tidydraws
+```{python}
 compare = td.compare_draws(dt, "beta[group]", groups=["prior", "posterior"])
 ```
 
@@ -480,6 +485,10 @@ Same simple regression as §1, but sampled with `chains=1`.  Verifies that nothi
 ```{python}
 # | cache: true
 dt, obs = simple_regression_1chain(seed=2032)
+```
+
+### Use tidydraws
+```{python}
 draws = td.parameter_draws(dt, "alpha", "beta", "sigma")
 ```
 

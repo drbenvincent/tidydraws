@@ -99,7 +99,7 @@ pred.head()
 
 Note the columns: `chain`, `draw`, `obs_ind`, `mu`, `groups`, `group_idx`, `x`, `mu_true`, and `y`. No `beta`, no `intercept` — parameters stay in their own frame.
 
-## Gallery
+## Plotting
 
 ### Posterior expected fit by group
 
