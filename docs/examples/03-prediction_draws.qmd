@@ -106,7 +106,7 @@ Note the columns: `chain`, `draw`, `obs_ind`, `mu`, `groups`, `group_idx`, `x`, 
 Summarise `mu` per observation with 50%, 80%, and 95% intervals, then draw nested ribbons, a median line, the true generating line, and the raw observed `y` values.
 
 ```{python}
-summary = point_interval(
+summary = td.point_interval(
     pred,
     "mu",
     group_by=["obs_ind", "x", "groups", "mu_true", "y"],
@@ -252,7 +252,7 @@ pred_y = td.prediction_draws(dt, newdata=observed, var_name="y").rename({
     "y_right": "y_obs"
 })
 
-summary_y = point_interval(
+summary_y = td.point_interval(
     pred_y,
     "y",
     group_by=["obs_ind", "x", "groups", "mu_true", "y_obs"],
@@ -553,7 +553,7 @@ Subset with `.filter()` before summarising — useful when the full prediction s
 west = td.prediction_draws(dt, newdata=observed, var_name="mu").filter(
     pl.col("groups") == "West"
 )
-s_west = point_interval(
+s_west = td.point_interval(
     west, "mu", group_by=["obs_ind", "x", "y", "mu_true"], probs=(0.89,)
 ).sort("x")
 ```
