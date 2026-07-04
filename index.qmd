@@ -28,6 +28,8 @@ import plotnine as p9
 import seaborn as sns
 import seaborn.objects as so
 from matplotlib.figure import Figure
+import altair as alt
+import pandas as pd
 import polars as pl
 import pymc as pm
 import tidydraws as td
@@ -230,6 +232,74 @@ fig = Figure(figsize=(8, 6))
 )
 
 fig
+```
+
+#### altair
+
+```{python}
+# | fig-cap: "Posterior forest plot, density, prior vs posterior, and predictive fit via Altair."
+# Forest plot
+alt_forest = (
+    alt
+    .layer(
+        alt
+        .Chart(beta_summary.to_pandas())
+        .mark_errorbar(ticks=True)
+        .encode(x="groups:N", y="beta_lower:Q", y2="beta_upper:Q"),
+        alt
+        .Chart(beta_summary.to_pandas())
+        .mark_point(color="steelblue")
+        .encode(x="groups:N", y="beta:Q"),
+        alt
+        .Chart(pd.DataFrame({"y0": [0]}))
+        .mark_rule(color="#888888", strokeDash=[4, 4])
+        .encode(y="y0:Q"),
+    )
+    .resolve_scale(y="shared")
+    .properties(title="Forest plot", width=200, height=200)
+)
+
+# Density
+alt_density = (
+    alt
+    .Chart(beta_df.to_pandas())
+    .transform_density("beta", groupby=["groups"], as_=["beta", "density"])
+    .mark_area(opacity=0.5)
+    .encode(x="beta:Q", y="density:Q", color="groups:N")
+    .properties(title="Posterior density", width=200, height=200)
+)
+
+# Prior vs posterior
+alt_compare = (
+    alt
+    .Chart(compare.to_pandas())
+    .transform_density("beta", groupby=["groups", "source"], as_=["beta", "density"])
+    .mark_area(opacity=0.5)
+    .encode(x="beta:Q", y="density:Q", color="source:N")
+    .facet("groups:N", columns=2)
+    .properties(title="Prior vs posterior")
+)
+
+# Predictive fit
+alt_pred = (
+    alt
+    .layer(
+        alt
+        .Chart(pred_summary.to_pandas())
+        .mark_area(opacity=0.25)
+        .encode(x="x:Q", y="mu_lower:Q", y2="mu_upper:Q", color="group:N"),
+        alt
+        .Chart(pred_summary.to_pandas())
+        .mark_line()
+        .encode(x="x:Q", y="mu:Q", color="group:N"),
+    )
+    .resolve_scale(y="shared")
+    .properties(title="Predictive fit", width=200, height=200)
+)
+
+(
+    alt.hconcat(alt_forest, alt_density) & alt.hconcat(alt_compare, alt_pred)
+).resolve_scale(color="independent")
 ```
 ::::
 
