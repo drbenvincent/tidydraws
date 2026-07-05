@@ -101,9 +101,9 @@ dt.update(prior)
 ## Use tidydraws
 
 ```{python}
-beta_df = td.parameter_draws(dt, "beta[groups]")
+beta_df = td.parameter_draws(dt, "beta")
 beta_summary = td.point_interval(beta_df, "beta", group_by="groups").sort("groups")
-compare = td.compare_draws(dt, "beta[groups]")
+compare = td.compare_draws(dt, "beta")
 pred = td.prediction_draws(dt, newdata=observed, var_name="mu")
 pred_summary = td.point_interval(pred, "mu", group_by=["obs_ind", "x", "group"]).sort(
     "x"

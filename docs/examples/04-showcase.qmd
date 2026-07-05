@@ -130,7 +130,7 @@ One-dimensional `alpha[group]` with string coordinate labels.  Exercises `_datat
 ```{python}
 # | cache: true
 dt, obs = varying_intercepts(seed=2027)
-draws = td.parameter_draws(dt, "alpha[group]")
+draws = td.parameter_draws(dt, "alpha")
 forest = td.point_interval(draws, "alpha", group_by="group", probs=(0.50, 0.89))
 ```
 
@@ -179,7 +179,7 @@ dt, obs = varying_slopes(seed=2028)
 
 ### Use tidydraws
 ```{python}
-draws = td.parameter_draws(dt, "beta[group]", "sigma")
+draws = td.parameter_draws(dt, "beta", "sigma")
 ```
 
 ### Beta vs sigma scatter
@@ -230,7 +230,7 @@ Two 1-d arrays on the same dimensions: `alpha[group]` and `beta[group]`.  `param
 ```{python}
 # | cache: true
 dt, obs = varying_both(seed=2029)
-draws = td.parameter_draws(dt, "alpha[group]", "beta[group]")
+draws = td.parameter_draws(dt, "alpha", "beta")
 ```
 
 ### 2D density by group
@@ -284,7 +284,7 @@ dt, obs = multiple_regression(seed=2030)
 
 ### Use tidydraws
 ```{python}
-draws = td.parameter_draws(dt, "b1", "b2", "b3", "alpha[group]")
+draws = td.parameter_draws(dt, "b1", "b2", "b3", "alpha")
 
 coefs = pl.concat([
     draws.select(pl.col("group"), pl.col("b1").alias("value")).with_columns(
@@ -353,7 +353,7 @@ dt, obs, grid = logistic(seed=2031)
 
 ### Use tidydraws
 ```{python}
-draws = td.parameter_draws(dt, "alpha[group]", "beta")
+draws = td.parameter_draws(dt, "alpha", "beta")
 ```
 
 ```{python}
@@ -441,7 +441,7 @@ dt, _obs = varying_slopes(seed=2028)  # same seed as §3 — already has prior
 
 ### Use tidydraws
 ```{python}
-compare = td.compare_draws(dt, "beta[group]", groups=["prior", "posterior"])
+compare = td.compare_draws(dt, "beta", groups=["prior", "posterior"])
 ```
 
 ### Overlaid prior and posterior densities

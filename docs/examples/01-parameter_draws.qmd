@@ -6,15 +6,15 @@ status: stable
 
 `parameter_draws()` is the entry point for parameter-space plots: it pulls posterior draws out of an ArviZ `DataTree` into a tidy Polars `DataFrame` — one row per `chain × draw × coordinate`, each variable a column. This example starts with simulated observed data, fits a real PyMC model, and then uses the resulting posterior draws for densities, intervals, contrasts, and cross-parameter plots.
 
-## The string spec
+## Auto-detected dimensions
 
-A spec names a variable and, in brackets, the dimensions to spread over. The bracketed names must match coordinate names in the `DataTree`.
+Dimensions are read from the xarray DataArray and spread automatically — no bracket syntax is needed. `chain` and `draw` are the only dimensions that are *not* included in the output columns.
 
-| Spec | Meaning | Rows |
+| Variable | Meaning | Rows |
 | --- | --- | --- |
 | `"sigma"` | scalar parameter | `chain × draw` |
-| `"beta[groups]"` | one-dimensional array | `chain × draw × groups` |
-| `"intercept[groups]"` | another group-level array | `chain × draw × groups` |
+| `"beta"` | one-dimensional array | `chain × draw × groups` |
+| `"intercept"` | another group-level array | `chain × draw × groups` |
 
 Request several variables in one call and `tidydraws` joins them: variables sharing a dimension are inner-joined; a scalar is broadcast across an array's dimensions.
 
@@ -110,7 +110,7 @@ dt
 One `parameter_draws()` call extracts group slopes and intercepts from the fitted posterior:
 
 ```{python}
-beta_df = td.parameter_draws(dt, "beta[groups]", "intercept[groups]")
+beta_df = td.parameter_draws(dt, "beta", "intercept")
 beta_df.head()
 ```
 
@@ -375,7 +375,7 @@ truth_contrasts = truth.filter(pl.col("groups") != reference_group).select(
 Request `beta[groups]` and the scalar `sigma` together: `sigma` is broadcast onto every `beta[groups]` row, so you can colour one by the other directly.
 
 ```{python}
-mixed = td.parameter_draws(dt, "beta[groups]", "sigma")
+mixed = td.parameter_draws(dt, "beta", "sigma")
 ```
 
 ::: {.panel-tabset}
