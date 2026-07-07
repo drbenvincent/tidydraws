@@ -20,15 +20,22 @@
 
 """Tests that verify the backend dispatch works for both DataTree and InferenceData.
 
-We construct a duck-type ``InferenceData`` object (attribute-access groups, no
-``.children``) and run the same assertions against both backends. This proves the
-``_get_group`` / ``_has_group`` dispatch without needing two arviz versions.
+Three backend variants are exercised:
+
+- ``datatree``: an ``xr.DataTree`` (arviz >=1.0).
+- ``inferencedata``: ``_InferenceDataMock``, a duck-type with attribute-access
+  groups and no ``.children``. Always available; proves the dispatch shape.
+- ``real_inferencedata``: an actual ``arviz.InferenceData`` constructed from
+  group kwargs. Only available on arviz <1.0 — on arviz >=1.0
+  ``az.InferenceData`` is aliased to ``DataTree`` and rejects group kwargs, so
+  the variant is skipped (the datatree variant already covers that path).
 """
 
 import numpy as np
 import polars as pl
 import pytest
 import xarray as xr
+import arviz as az
 
 from tidydraws import compare_draws, parameter_draws, prediction_draws
 
@@ -52,6 +59,43 @@ class _InferenceDataMock:
 def _datatree_to_idata(dt: xr.DataTree, *groups: str) -> _InferenceDataMock:
     """Convert selected DataTree groups to an InferenceData duck-type."""
     return _InferenceDataMock(**{g: dt.children[g].to_dataset() for g in groups})
+
+
+def _legacy_arviz_available() -> bool:
+    """True iff the installed arviz exposes a real ``InferenceData`` (arviz <1.0).
+
+    On arviz >=1.0 ``az.InferenceData`` is aliased to ``xarray.DataTree`` and
+    emits a ``MigrationWarning``; its constructor rejects group kwargs. We detect
+    the legacy class by checking that constructing from kwargs succeeds.
+    """
+    import warnings
+
+    ds = xr.Dataset(
+        {"x": (["chain", "draw"], np.zeros((1, 1)))}, coords={"chain": [0], "draw": [0]}
+    )
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Warning)
+            az.InferenceData(posterior=ds)
+        return True
+    except Exception:
+        return False
+
+
+_LEGACY_ARVIZ = _legacy_arviz_available()
+_SKIP_REAL = pytest.mark.skipif(
+    not _LEGACY_ARVIZ,
+    reason="real az.InferenceData requires arviz<1.0; on >=1.0 it aliases to DataTree",
+)
+
+
+def _make_real_inferencedata(**groups: xr.Dataset):
+    """Construct a real ``arviz.InferenceData`` from group kwargs (legacy arviz).
+
+    Must only be called when ``_LEGACY_ARVIZ`` is True. Mirrors the kwargs shape
+    used by the mock so the same assertions hold against both.
+    """
+    return az.InferenceData(**groups)
 
 
 # ---------------------------------------------------------------------------
@@ -138,14 +182,24 @@ def _make_prediction_data():
 BACKENDS = pytest.mark.parametrize("backend", ["datatree", "inferencedata"])
 
 
-def _get_parameter_backend(request):
+def _build_real_parameter_idata():
+    """Build a real ``az.InferenceData`` mirroring the parameter mock."""
+    dt, _ = _make_parameter_data()
+    return _make_real_inferencedata(
+        posterior=dt.children["posterior"].to_dataset(),
+        prior=dt.children["prior"].to_dataset(),
+        prior_pred=dt.children["prior_pred"].to_dataset(),
+    )
+
+
+@pytest.fixture(params=["datatree", "inferencedata", "real_inferencedata"])
+def parameter_backend(request):
+    if request.param == "real_inferencedata":
+        if not _LEGACY_ARVIZ:
+            pytest.skip("requires arviz<1.0 (real az.InferenceData)")
+        return _build_real_parameter_idata()
     dt, idata = _make_parameter_data()
     return dt if request.param == "datatree" else idata
-
-
-@pytest.fixture(params=["datatree", "inferencedata"])
-def parameter_backend(request):
-    return _get_parameter_backend(request)
 
 
 class TestParameterDrawsCompat:
@@ -205,8 +259,12 @@ class TestParameterDrawsCompat:
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture(params=["datatree", "inferencedata"])
+@pytest.fixture(params=["datatree", "inferencedata", "real_inferencedata"])
 def compare_backend(request):
+    if request.param == "real_inferencedata":
+        if not _LEGACY_ARVIZ:
+            pytest.skip("requires arviz<1.0 (real az.InferenceData)")
+        return _build_real_parameter_idata()
     dt, idata = _make_parameter_data()
     return dt if request.param == "datatree" else idata
 
@@ -254,8 +312,21 @@ class TestCompareDrawsCompat:
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture(params=["datatree", "inferencedata"])
+def _build_real_prediction_idata():
+    """Build a real ``az.InferenceData`` mirroring the prediction mock."""
+    dt, _ = _make_prediction_data()
+    return _make_real_inferencedata(
+        predictions=dt.children["predictions"].to_dataset(),
+        predictions_constant_data=dt.children["predictions_constant_data"].to_dataset(),
+    )
+
+
+@pytest.fixture(params=["datatree", "inferencedata", "real_inferencedata"])
 def prediction_backend(request):
+    if request.param == "real_inferencedata":
+        if not _LEGACY_ARVIZ:
+            pytest.skip("requires arviz<1.0 (real az.InferenceData)")
+        return _build_real_prediction_idata()
     dt, idata = _make_prediction_data()
     return dt if request.param == "datatree" else idata
 

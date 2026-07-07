@@ -14,7 +14,16 @@ concurrency:
 
 jobs:
   test:
+    name: test (arviz ${{ matrix.arviz }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # "locked" uses the arviz version pinned in uv.lock (>=1.0).
+        # "legacy" downgrades to arviz<1.0 to exercise the real
+        # az.InferenceData dispatch branch (skipped on >=1.0 where
+        # az.InferenceData is aliased to xarray.DataTree).
+        arviz: [locked, legacy]
     permissions:
       contents: read
     steps:
@@ -25,8 +34,15 @@ jobs:
         uses: astral-sh/setup-uv@v8.2.0
       - name: Install dependencies
         run: uv sync --all-extras
+      - name: Pin legacy arviz (<1.0)
+        if: matrix.arviz == 'legacy'
+        # Override the lock's arviz>=1.0 with a legacy release so the
+        # real-InferenceData test variants activate instead of skipping.
+        run: uv pip install 'arviz<1.0'
       - name: Run tests
-        run: uv run pytest -v
+        # --no-sync so the legacy-arviz downgrade from the previous step
+        # is not reverted by `uv run` reconciling back to uv.lock.
+        run: uv run --no-sync pytest -v
 
   prek:
     runs-on: ubuntu-latest
