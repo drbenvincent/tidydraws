@@ -305,12 +305,18 @@ alt_pred = (
 
 ## Install
 
-:::: {.panel-tabset}
+::::: {.panel-tabset}
 
 #### uv
 
 ```bash
 uv add tidydraws
+```
+
+If you want the latest functionality merged into main but not yet released, install directly from GitHub:
+
+```bash
+uv add git+https://github.com/drbenvincent/tidydraws.git
 ```
 
 #### pip
@@ -319,7 +325,13 @@ uv add tidydraws
 pip install tidydraws
 ```
 
-::::
+If you want the latest functionality merged into main but not yet released, install directly from GitHub:
+
+```bash
+pip install git+https://github.com/drbenvincent/tidydraws.git
+```
+
+:::::
 
 ## Why tidydraws?
 

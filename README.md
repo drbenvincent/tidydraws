@@ -26,6 +26,18 @@ With pip:
 pip install tidydraws
 ```
 
+If you want the latest functionality merged into main but not yet released, install directly from GitHub:
+
+```bash
+pip install git+https://github.com/drbenvincent/tidydraws.git
+```
+
+Or with uv:
+
+```bash
+uv add git+https://github.com/drbenvincent/tidydraws.git
+```
+
 ## Why tidydraws?
 
 Plotting MCMC output in Python means manually slicing xarray dimensions, iterating groups, and aligning coordinates — imperative, verbose, error-prone. R's [`tidybayes`](https://github.com/mjskay/tidybayes) solved this with a data layer that respects parameter space vs prediction space. `tidydraws` brings that to Python on Polars.
