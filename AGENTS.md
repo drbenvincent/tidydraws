@@ -51,7 +51,7 @@ Key point: prefix Python/pytest commands with `uv run` so they use the project's
 - **Fail loudly** on missing data to avoid silent misalignment bugs; give the user explicit guidance.
 - **Cross-dim joins auto-join with a logged warning** (e.g. scalar `sigma` broadcast across `beta[groups]`) — common case "just works", transparently.
 - **`compare_draws()` ships in v0.1** because prior vs. posterior comparison is fundamental.
-- **ArviZ 1.0 DataTree only** — greenfield, no legacy `InferenceData` debt. Access groups via `.children[group].to_dataset()`.
+- **Supports both `xr.DataTree` and `arviz.InferenceData`** — dispatch via `_get_group()` / `_has_group()` helpers using duck-typing.
 - **Polars over pandas** for faster joins and a consistent tidy-frame type across the API surface.
 
 ---
@@ -81,7 +81,7 @@ def compare_draws(
 
 ### Core helpers (in `_extract.py`)
 
-- `_datatree_group_to_df(dt, group)` → `pl.DataFrame` with chain, draw, and all coord columns.
+- `_group_to_df(dt, group)` → `pl.DataFrame` with chain, draw, and all coord columns.
 - `_align_dims(frames)` → inner-join same-dim frames; cross-join different-dim frames with a logged warning.
 - `_coerce_to_dataframe(newdata)` → `pl.DataFrame` from `pl.DataFrame` / `pd.DataFrame`.
 
@@ -91,7 +91,7 @@ def compare_draws(
 
 - Returning `pl.LazyFrame` or leaving a `.lazy()` / `.collect()` round-trip in the extraction path — the data layer is eager by design.
 - Confusing dimension names with coordinate names in xarray — the DataArray already knows its dims, so auto-detection gets this right.
-- Forgetting groups are accessed via `.children[group].to_dataset()`.
+- Accessing groups directly instead of through `_get_group()` / `_has_group()` — use the helpers for compat with both DataTree and InferenceData.
 - Running `pytest`/`python` without `uv run` (wrong environment).
 
 ---

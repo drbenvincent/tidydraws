@@ -18,25 +18,56 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+from __future__ import annotations
+
 import logging
+from typing import TYPE_CHECKING
 
 import polars as pl
 import xarray as xr
 
+if TYPE_CHECKING:
+    import arviz as az
+
 logger = logging.getLogger("tidydraws")
 
+# Objects tidydraws accepts: an ``xarray.DataTree`` (arviz >=1.0) or an
+# ``arviz.InferenceData`` (arviz <1.0). Both expose groups as ``xr.Dataset``.
+# PEP 695 ``type`` statement: the rhs is lazy, so no runtime arviz import
+# is needed (``az`` is only consulted by type checkers via TYPE_CHECKING).
+type ArviZData = xr.DataTree | az.InferenceData
 
-def _datatree_group_to_df(dt, group: str) -> pl.DataFrame:
+
+def _get_group(dt: ArviZData, group: str) -> xr.Dataset:
+    """Return an xr.Dataset for *group* from either a DataTree or InferenceData."""
+    if hasattr(dt, "children"):
+        # DataTree (arviz >=1.0)
+        if group not in dt.children:
+            raise KeyError(f"Group '{group}' not found.")
+        return dt.children[group].to_dataset()
+
+    # InferenceData (arviz <1.0) or duck-type with attribute access
+    if not hasattr(dt, group):
+        raise KeyError(f"Group '{group}' not found.")
+    return getattr(dt, group)
+
+
+def _has_group(dt: ArviZData, group: str) -> bool:
+    """Check whether *group* exists in *dt* (DataTree or InferenceData)."""
+    if hasattr(dt, "children"):
+        return group in dt.children
+    return hasattr(dt, group)
+
+
+def _group_to_df(dt: ArviZData, group: str) -> pl.DataFrame:
     """
-    Convert a DataTree group to a Polars DataFrame containing all coordinates and variables.
+    Convert a group (from a DataTree or InferenceData) to a Polars DataFrame
+    containing all coordinates and variables.
 
     Warning: If the group contains many variables with different dimensions,
     xarray's to_dataframe() can create a very large sparse DataFrame.
     """
-    if group not in dt.children:
-        raise KeyError(f"Group '{group}' not found in DataTree.")
-
-    ds = dt.children[group].to_dataset()
+    ds = _get_group(dt, group)
 
     # If there are no data variables, we just want the coordinates.
     # to_dataframe() requires at least one data variable; otherwise it fails.
@@ -89,7 +120,7 @@ def _align_dims(
 
 
 def parameter_draws(
-    dt: xr.DataTree,
+    dt: ArviZData,
     *var_names: str,
     group: str = "posterior",
     chain_dim: str = "chain",
@@ -102,8 +133,8 @@ def parameter_draws(
 
     Parameters
     ----------
-    dt : xr.DataTree
-        ArviZ DataTree object (xarray.DataTree) from PyMC sampling.
+    dt : xr.DataTree or arviz.InferenceData
+        ArviZ InferenceData or xarray DataTree from PyMC sampling.
     *var_names : str
         Names of variables to extract. Dimensions are auto-detected.
     group : str
@@ -143,10 +174,10 @@ def parameter_draws(
     parameter_draws(dt, "gamma")
     # -> columns: chain, draw, time, group, gamma
     """
-    if group not in dt.children:
-        raise KeyError(f"Group '{group}' not found in DataTree.")
+    if not _has_group(dt, group):
+        raise KeyError(f"Group '{group}' not found.")
 
-    ds = dt.children[group].to_dataset()
+    ds = _get_group(dt, group)
 
     frames = []
     for name in var_names:
@@ -170,7 +201,7 @@ def parameter_draws(
 
 
 def prediction_draws(
-    dt: xr.DataTree,
+    dt: ArviZData,
     newdata,
     var_name,
     idata_group="predictions",
@@ -186,8 +217,8 @@ def prediction_draws(
 
     Parameters
     ----------
-    dt : xr.DataTree
-        ArviZ DataTree object (xarray.DataTree) containing prediction samples.
+    dt : xr.DataTree or arviz.InferenceData
+        ArviZ InferenceData or xarray DataTree containing prediction samples.
     newdata : pl.DataFrame | pd.DataFrame | None
         Covariate grid. If None, attempts to read from dt[constant_data_group].
         If the group is not found, raises a clear error directing user to pass
@@ -199,10 +230,9 @@ def prediction_draws(
         InferenceData group containing the predictive draws ("predictions",
         "posterior_predictive", or custom). Default "predictions".
     constant_data_group : str
-        InferenceData group name for the covariate grid that aligns with the
-        prediction draws. Default "predictions_constant_data" (ArviZ 1.x
-        convention for the constant data paired with a "predictions" group).
-        Set this parameter if your DataTree uses a different naming convention.
+        Group name for the covariate grid that aligns with the
+        prediction draws. Default "predictions_constant_data".
+        Set this parameter if your data uses a different naming convention.
     join_on : str | list[str]
         Column(s) to join newdata to the draws on. Default "obs_ind".
 
@@ -228,12 +258,12 @@ def prediction_draws(
     prediction_draws(dt, newdata=fine_grid, var_name="mu")
     """
 
-    # Check if group exists in the DataTree
-    if idata_group not in dt.children:
-        raise KeyError(f"Group '{idata_group}' not found in DataTree.")
+    # Check if group exists
+    if not _has_group(dt, idata_group):
+        raise KeyError(f"Group '{idata_group}' not found.")
 
     # Extract the predictive draws for the specified variable
-    ds = dt.children[idata_group].to_dataset()
+    ds = _get_group(dt, idata_group)
     if var_name not in ds.data_vars:
         raise KeyError(f"Variable '{var_name}' not found in group '{idata_group}'.")
 
@@ -247,14 +277,14 @@ def prediction_draws(
     # Handle newdata parameter
     if newdata is None:
         # Check if constant_data_group exists
-        if constant_data_group not in dt.children:
+        if not _has_group(dt, constant_data_group):
             raise KeyError(
-                f"constant_data_group '{constant_data_group}' not found in DataTree. "
-                "Pass newdata explicitly or check your DataTree structure."
+                f"constant_data_group '{constant_data_group}' not found. "
+                "Pass newdata explicitly or check your data structure."
             )
 
         # Read the constant data group
-        const_df = _datatree_group_to_df(dt, constant_data_group)
+        const_df = _group_to_df(dt, constant_data_group)
 
         # Join pred_df with const_df on join_on
         result = pred_df.join(const_df, on=join_on, how="left")
@@ -286,7 +316,7 @@ def _coerce_to_dataframe(newdata) -> pl.DataFrame:
 
 
 def compare_draws(
-    dt: xr.DataTree,
+    dt: ArviZData,
     *var_names: str,
     groups: list[str] | None = None,
     group_name: str = "source",
@@ -299,8 +329,8 @@ def compare_draws(
 
     Parameters
     ----------
-    dt : xr.DataTree
-        ArviZ DataTree object.
+    dt : xr.DataTree or arviz.InferenceData
+        ArviZ InferenceData or xarray DataTree object.
     *var_names : str
         Names of variables to extract (as for :func:`parameter_draws`).
     groups : list[str] | None
