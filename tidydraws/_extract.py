@@ -18,15 +18,27 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+from __future__ import annotations
+
 import logging
+from typing import TYPE_CHECKING
 
 import polars as pl
 import xarray as xr
 
+if TYPE_CHECKING:
+    import arviz as az
+
 logger = logging.getLogger("tidydraws")
 
+# Objects tidydraws accepts: an ``xarray.DataTree`` (arviz >=1.0) or an
+# ``arviz.InferenceData`` (arviz <1.0). Both expose groups as ``xr.Dataset``.
+# PEP 695 ``type`` statement: the rhs is lazy, so no runtime arviz import
+# is needed (``az`` is only consulted by type checkers via TYPE_CHECKING).
+type ArviZData = xr.DataTree | az.InferenceData
 
-def _get_group(dt, group: str) -> xr.Dataset:
+
+def _get_group(dt: ArviZData, group: str) -> xr.Dataset:
     """Return an xr.Dataset for *group* from either a DataTree or InferenceData."""
     if hasattr(dt, "children"):
         # DataTree (arviz >=1.0)
@@ -40,14 +52,14 @@ def _get_group(dt, group: str) -> xr.Dataset:
     return getattr(dt, group)
 
 
-def _has_group(dt, group: str) -> bool:
+def _has_group(dt: ArviZData, group: str) -> bool:
     """Check whether *group* exists in *dt* (DataTree or InferenceData)."""
     if hasattr(dt, "children"):
         return group in dt.children
     return hasattr(dt, group)
 
 
-def _group_to_df(dt, group: str) -> pl.DataFrame:
+def _group_to_df(dt: ArviZData, group: str) -> pl.DataFrame:
     """
     Convert a group (from a DataTree or InferenceData) to a Polars DataFrame
     containing all coordinates and variables.
@@ -108,7 +120,7 @@ def _align_dims(
 
 
 def parameter_draws(
-    dt: xr.DataTree,
+    dt: ArviZData,
     *var_names: str,
     group: str = "posterior",
     chain_dim: str = "chain",
@@ -189,7 +201,7 @@ def parameter_draws(
 
 
 def prediction_draws(
-    dt: xr.DataTree,
+    dt: ArviZData,
     newdata,
     var_name,
     idata_group="predictions",
@@ -267,7 +279,7 @@ def prediction_draws(
         # Check if constant_data_group exists
         if not _has_group(dt, constant_data_group):
             raise KeyError(
-                f"Group '{constant_data_group}' not found. "
+                f"constant_data_group '{constant_data_group}' not found. "
                 "Pass newdata explicitly or check your data structure."
             )
 
@@ -304,7 +316,7 @@ def _coerce_to_dataframe(newdata) -> pl.DataFrame:
 
 
 def compare_draws(
-    dt: xr.DataTree,
+    dt: ArviZData,
     *var_names: str,
     groups: list[str] | None = None,
     group_name: str = "source",

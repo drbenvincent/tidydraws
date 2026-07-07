@@ -123,7 +123,7 @@ pred_summary = td.point_interval(
 
 ## 2. Varying intercepts
 
-One-dimensional `alpha[group]` with string coordinate labels.  Exercises `_datatree_group_to_df` with non-numeric coords and tests that forest-plot sorting/filtering works on string dims.
+One-dimensional `alpha[group]` with string coordinate labels.  Exercises `_group_to_df` with non-numeric coords and tests that forest-plot sorting/filtering works on string dims.
 
 ### Use tidydraws
 
