@@ -4,7 +4,7 @@ description: "Stress-test tidydraws across model archetypes — one canonical pl
 status: experimental
 ---
 
-`tidydraws` is tested against synthetic DataTrees. This page stress-tests the full pipeline — PyMC model → `DataTree` → `parameter_draws` / `prediction_draws` / `compare_draws` → plot — across eight model archetypes that each exercise a different code path.  If this page builds, the data layer survived that shape.  If it breaks, you know exactly which archetype is the culprit.
+`tidydraws` is tested against synthetic ArviZ objects. This page stress-tests the full pipeline — PyMC model → ArviZ object → `parameter_draws` / `prediction_draws` / `compare_draws` → plot — across eight model archetypes that each exercise a different code path.  If this page builds, the data layer survived that shape.  If it breaks, you know exactly which archetype is the culprit.
 
 ```{python}
 # | code-fold: true

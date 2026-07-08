@@ -4,7 +4,7 @@ description: "Fit a PyMC model, compare prior and posterior draws with compare_d
 status: stable
 ---
 
-`compare_draws()` is the prior/posterior comparison helper: it calls `parameter_draws()` once per selected group in the ArviZ `DataTree`, tags each result with a `source` column, and stacks them into a single `DataFrame`. By default it compares `posterior` against `prior`, which is the workflow most users need after fitting a PyMC model.
+`compare_draws()` is the prior/posterior comparison helper: it calls `parameter_draws()` once per selected group in the ArviZ object, tags each result with a `source` column, and stacks them into a single `DataFrame`. By default it compares `posterior` against `prior`, which is the workflow most users need after fitting a PyMC model.
 
 ## Full PyMC workflow
 
@@ -250,4 +250,4 @@ ci = td.point_interval(compare, "beta", group_by=["groups", "source"], probs=(0.
 
 :::
 
-`group_name` sets the source column's name, and `groups` can compare other `DataTree` groups when needed. Next, join posterior expectations to covariates with [`prediction_draws()`](prediction_draws.qmd).
+`group_name` sets the source column's name, and `groups` can compare other ArviZ groups when needed. Next, join posterior expectations to covariates with [`prediction_draws()`](prediction_draws.qmd).

@@ -4,7 +4,7 @@
 
 > A tidybayes-inspired data layer for declarative Bayesian visualisation in Python
 
-`tidydraws` turns MCMC output (ArviZ `DataTree`) into tidy Polars frames that are ready to plot — one `.to_pandas()` away from any ggplot-like backend. It does no plotting itself. Three functions, three spaces:
+`tidydraws` turns MCMC output (ArviZ) into tidy Polars frames that are ready to plot — one `.to_pandas()` away from any ggplot-like backend. It does no plotting itself. Three functions, three spaces:
 
 | Function | Space | Plot archetype |
 | --- | --- | --- |

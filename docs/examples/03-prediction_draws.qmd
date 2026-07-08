@@ -6,7 +6,7 @@ status: stable
 
 `prediction_draws()` joins posterior prediction draws such as `mu` to covariates, producing one tidy row per `chain × draw × observation`. Parameters are deliberately **excluded** — prediction space stays separate from parameter space, so coefficients never get duplicated across observations.
 
-Pass a `DataFrame` when you want explicit control over the covariates used for plotting. With `newdata=None`, `prediction_draws()` reads covariates from a constant-data group in the `DataTree` and fails loudly if that group is missing.
+Pass a `DataFrame` when you want explicit control over the covariates used for plotting. With `newdata=None`, `prediction_draws()` reads covariates from a constant-data group in the ArviZ object and fails loudly if that group is missing.
 
 ## Full PyMC workflow
 
