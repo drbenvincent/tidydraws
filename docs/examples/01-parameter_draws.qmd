@@ -4,7 +4,7 @@ description: "Fit a PyMC model, extract posterior draws with parameter_draws(), 
 status: stable
 ---
 
-`parameter_draws()` is the entry point for parameter-space plots: it pulls posterior draws out of an ArviZ `DataTree` into a tidy Polars `DataFrame` — one row per `chain × draw × coordinate`, each variable a column. This example starts with simulated observed data, fits a real PyMC model, and then uses the resulting posterior draws for densities, intervals, contrasts, and cross-parameter plots.
+`parameter_draws()` is the entry point for parameter-space plots: it pulls posterior draws out of an ArviZ object into a tidy Polars `DataFrame` — one row per `chain × draw × coordinate`, each variable a column. This example starts with simulated observed data, fits a real PyMC model, and then uses the resulting posterior draws for densities, intervals, contrasts, and cross-parameter plots.
 
 ## Auto-detected dimensions
 
