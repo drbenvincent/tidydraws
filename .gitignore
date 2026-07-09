@@ -8,6 +8,7 @@ build/
 *.spec
 .env/
 .venv/
+venv-*/
 .scratch/
 
 # Great Docs build directory (ephemeral, do not commit)

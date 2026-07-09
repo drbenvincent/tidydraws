@@ -1,0 +1,27 @@
+name: Release
+
+# Triggered by a version tag push (e.g. 0.5.0) created by `make release-*`.
+# Creates a GitHub Release with auto-generated notes. The "release published"
+# event then fires publish.yml → build → TestPyPI → PyPI.
+#
+# Only admins can push version tags (enforced by the tag protection ruleset),
+# so this workflow cannot be triggered by non-admin collaborators.
+on:
+  push:
+    tags:
+      - "*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "${GITHUB_REF_NAME}" --generate-notes --title "${GITHUB_REF_NAME}"
