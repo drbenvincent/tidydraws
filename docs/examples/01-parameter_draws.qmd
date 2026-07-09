@@ -6,18 +6,6 @@ status: stable
 
 `parameter_draws()` is the entry point for parameter-space plots: it pulls posterior draws out of an ArviZ object into a tidy Polars `DataFrame` — one row per `chain × draw × coordinate`, each variable a column. This example starts with simulated observed data, fits a real PyMC model, and then uses the resulting posterior draws for densities, intervals, contrasts, and cross-parameter plots.
 
-## Auto-detected dimensions
-
-Dimensions are read from the xarray DataArray and spread automatically — no bracket syntax is needed. `chain` and `draw` are the only dimensions that are *not* included in the output columns.
-
-| Variable | Meaning | Rows |
-| --- | --- | --- |
-| `"sigma"` | scalar parameter | `chain × draw` |
-| `"beta"` | one-dimensional array | `chain × draw × groups` |
-| `"intercept"` | another group-level array | `chain × draw × groups` |
-
-Request several variables in one call and `tidydraws` joins them: variables sharing a dimension are inner-joined; a scalar is broadcast across an array's dimensions.
-
 ## Full PyMC workflow
 
 The data are generated from four groups with deliberately different intercepts and slopes, including one negative slope. That separation makes the posterior plots diagnose real group differences rather than noise around one common line.
