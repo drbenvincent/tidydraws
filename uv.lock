@@ -3095,7 +3095,7 @@ dev = [
 requires-dist = [
     { name = "altair", marker = "extra == 'altair'", specifier = ">=6.2.2" },
     { name = "altair", marker = "extra == 'dev'", specifier = ">=6.2.2" },
-    { name = "arviz", specifier = ">=0.12" },
+    { name = "arviz" },
     { name = "great-docs", marker = "extra == 'dev'", specifier = ">=0.14.0" },
     { name = "ipykernel", marker = "extra == 'dev'" },
     { name = "lets-plot", marker = "extra == 'letsplot'" },
