@@ -1,6 +1,6 @@
 # tidydraws
 
-![tidydraws logo](docs/assets/logo.jpg)
+![tidydraws logo](https://raw.githubusercontent.com/drbenvincent/tidydraws/main/docs/assets/logo.jpg)
 
 > A tidybayes-inspired data layer for declarative Bayesian visualisation in Python
 
@@ -12,7 +12,7 @@
 | [`prediction_draws()`](https://drbenvincent.github.io/tidydraws/docs/examples/prediction_draws.html) | prediction | ribbon + line, fit + data |
 | [`compare_draws()`](https://drbenvincent.github.io/tidydraws/docs/examples/compare_draws.html) | comparison | prior vs posterior, intervals |
 
-![tidydraws example](docs/assets/index-plot.png)
+![tidydraws example](https://raw.githubusercontent.com/drbenvincent/tidydraws/main/docs/assets/index-plot.png)
 
 ## Install
 
