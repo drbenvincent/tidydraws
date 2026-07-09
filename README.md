@@ -1,6 +1,20 @@
-# tidydraws
+<div align="center">
+  <a href="https://github.com/drbenvincent/tidydraws"><img width="40%" src="https://raw.githubusercontent.com/drbenvincent/tidydraws/main/docs/assets/logo.jpg"></a>
+</div>
 
-![tidydraws logo](https://raw.githubusercontent.com/drbenvincent/tidydraws/main/docs/assets/logo.jpg)
+----
+
+<div align="center">
+[![PyPI Version](https://img.shields.io/pypi/v/tidydraws)](https://pypi.org/project/tidydraws/) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT) [![Python](https://img.shields.io/pypi/pyversions/tidydraws.svg)](https://pypi.org/project/tidydraws/)
+
+[![CI](https://github.com/drbenvincent/tidydraws/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/drbenvincent/tidydraws/actions/workflows/ci.yml) [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff) [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
+
+[![GitHub Stars](https://img.shields.io/github/stars/drbenvincent/tidydraws?style=flat)](https://github.com/drbenvincent/tidydraws) [![Downloads](https://static.pepy.tech/badge/tidydraws)](https://pepy.tech/project/tidydraws) [![PyPI Downloads](https://img.shields.io/pypi/dm/tidydraws)](https://pypi.org/project/tidydraws/)
+</div>
+
+<!-- docs-start -->
+
+# tidydraws
 
 > A tidybayes-inspired data layer for declarative Bayesian visualisation in Python
 
