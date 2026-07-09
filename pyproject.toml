@@ -1,6 +1,6 @@
 [project]
 name = "tidydraws"
-version = "0.4.0"
+dynamic = ["version"]
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
@@ -82,6 +82,23 @@ Documentation = "https://drbenvincent.github.io/tidydraws/"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.version]
+source = "regex"
+path = "tidydraws/__init__.py"
+pattern = '__version__ = "(?P<version>[^"]+)"'
+
+[tool.bumpver]
+current_version = "0.4.0"
+version_pattern = "MAJOR.MINOR.PATCH"
+commit_message = "Bump version {old_version} -> {new_version}"
+commit = true
+tag = true
+push = true
+pre_commit_hook = "scripts/pre-bump.sh"
+
+[tool.bumpver.file_patterns]
+"tidydraws/__init__.py" = ['__version__ = "{version}"']
+
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",
@@ -92,6 +109,7 @@ dev = [
     "altair>=6.2.2",
     "vegafusion>=2.0.3",
     "vl-convert-python>=1.9.0",
+    "bumpver",
 ]
 
 [tool.ruff]

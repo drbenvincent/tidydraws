@@ -322,6 +322,21 @@ css = [
 ]
 
 [[package]]
+name = "bumpver"
+version = "2026.1132"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "click" },
+    { name = "colorama" },
+    { name = "lexid" },
+    { name = "toml" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/25/22/c0c9bf9e7ad6877e4c7c3dedd464e390d9fadb8927c61d6d77547eb17539/bumpver-2026.1132.tar.gz", hash = "sha256:80b223c23fca9bc9dd569b7a44680949d34bee23a738860d9a9b36f1abe3b0e0", size = 116784, upload-time = "2026-05-22T18:40:32.333Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ab/d6/45c1bf6bcf7b3f174ec0c7fe2d7dce773cbc853cfd8fde06c3153104ffff/bumpver-2026.1132-py2.py3-none-any.whl", hash = "sha256:b060170e7ff5d9ad7043a9d3d6288c7175f9c126744d08a2d6ef9b8377f6bd60", size = 65963, upload-time = "2026-05-22T18:40:30.515Z" },
+]
+
+[[package]]
 name = "cachetools"
 version = "6.2.6"
 source = { registry = "https://pypi.org/simple" }
@@ -1396,6 +1411,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/6f/78/75a612deb4cfb31c2da32c1e683a3e9709ef415f5538c13419f1cc6be143/lets_plot-4.10.1-cp314-cp314t-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:5577caa732244e0142f2bab85e564dc058ccd22882da28c5b7328b1d52f482e4", size = 7022863, upload-time = "2026-05-20T21:33:29.396Z" },
     { url = "https://files.pythonhosted.org/packages/19/dd/39303781f7dac149bd5f0a5637c228507811cbe7e97c836468cedbffc1a2/lets_plot-4.10.1-cp314-cp314t-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:9ab8524c7561850676f0554ed017622c9846097a9cafeb61ca9045207bc4ae6e", size = 7732125, upload-time = "2026-05-20T21:33:42.817Z" },
     { url = "https://files.pythonhosted.org/packages/6f/ec/a8798faa72cbe17798a8e5172d0ba1b90ec41feb274c03f63dbbc0aa4fb9/lets_plot-4.10.1-cp314-cp314t-win_amd64.whl", hash = "sha256:a8efbddd901adc0ecd576d73bbcc0aaaa10a7ddb06843c98861ed4fed3601885", size = 6546268, upload-time = "2026-05-20T21:33:21.544Z" },
+]
+
+[[package]]
+name = "lexid"
+version = "2021.1006"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/60/0b/28a3f9abc75abbf1fa996eb2dd77e1e33a5d1aac62566e3f60a8ec8b8a22/lexid-2021.1006.tar.gz", hash = "sha256:509a3a4cc926d3dbf22b203b18a4c66c25e6473fb7c0e0d30374533ac28bafe5", size = 11525, upload-time = "2021-04-02T20:18:34.668Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/cf/e3/35764404a4b7e2021be1f88f42264c2e92e0c4720273559a62461ce64a47/lexid-2021.1006-py2.py3-none-any.whl", hash = "sha256:5526bb5606fd74c7add23320da5f02805bddd7c77916f2dc1943e6bada8605ed", size = 7587, upload-time = "2021-04-02T20:18:33.129Z" },
 ]
 
 [[package]]
@@ -3029,7 +3053,6 @@ wheels = [
 
 [[package]]
 name = "tidydraws"
-version = "0.4.0"
 source = { editable = "." }
 dependencies = [
     { name = "arviz" },
@@ -3082,6 +3105,7 @@ plotnine = [
 [package.dev-dependencies]
 dev = [
     { name = "altair" },
+    { name = "bumpver" },
     { name = "lets-plot" },
     { name = "plotnine" },
     { name = "pymc" },
@@ -3093,15 +3117,18 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "altair", marker = "extra == 'all'", specifier = ">=6.2.2" },
     { name = "altair", marker = "extra == 'altair'", specifier = ">=6.2.2" },
     { name = "altair", marker = "extra == 'dev'", specifier = ">=6.2.2" },
     { name = "arviz" },
     { name = "great-docs", marker = "extra == 'dev'", specifier = ">=0.14.0" },
     { name = "ipykernel", marker = "extra == 'dev'" },
+    { name = "lets-plot", marker = "extra == 'all'" },
     { name = "lets-plot", marker = "extra == 'letsplot'" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0" },
     { name = "numpy" },
     { name = "pandas-stubs", marker = "extra == 'dev'" },
+    { name = "plotnine", marker = "extra == 'all'" },
     { name = "plotnine", marker = "extra == 'dev'" },
     { name = "plotnine", marker = "extra == 'plotnine'" },
     { name = "polars", specifier = ">=0.20" },
@@ -3110,24 +3137,26 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "quarto", marker = "extra == 'dev'", specifier = ">=0.1" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4" },
+    { name = "seaborn", marker = "extra == 'all'" },
     { name = "seaborn", marker = "extra == 'plotnine'" },
-    { name = "tidydraws", extras = ["altair"], marker = "extra == 'all'" },
-    { name = "tidydraws", extras = ["letsplot"], marker = "extra == 'all'" },
-    { name = "tidydraws", extras = ["plotnine"], marker = "extra == 'all'" },
+    { name = "vegafusion", marker = "extra == 'all'", specifier = ">=2.0" },
     { name = "vegafusion", marker = "extra == 'altair'", specifier = ">=2.0" },
     { name = "vegafusion", marker = "extra == 'dev'", specifier = ">=2.0.3" },
     { name = "vegafusion-python-embed", specifier = ">=1.6" },
+    { name = "vegafusion-python-embed", marker = "extra == 'all'", specifier = ">=1.6" },
     { name = "vegafusion-python-embed", marker = "extra == 'altair'", specifier = ">=1.6" },
     { name = "vegafusion-python-embed", marker = "extra == 'dev'", specifier = ">=1.6" },
+    { name = "vl-convert-python", marker = "extra == 'all'", specifier = ">=1.9.0" },
     { name = "vl-convert-python", marker = "extra == 'altair'", specifier = ">=1.9.0" },
     { name = "vl-convert-python", marker = "extra == 'dev'", specifier = ">=1.9.0" },
     { name = "xarray" },
 ]
-provides-extras = ["letsplot", "plotnine", "altair", "all", "dev"]
+provides-extras = ["all", "altair", "dev", "letsplot", "plotnine"]
 
 [package.metadata.requires-dev]
 dev = [
     { name = "altair", specifier = ">=6.2.2" },
+    { name = "bumpver" },
     { name = "lets-plot" },
     { name = "plotnine" },
     { name = "pymc", specifier = ">=6.0.1" },
@@ -3147,6 +3176,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/a3/ae/2ca4913e5c0f09781d75482874c3a95db9105462a92ddd303c7d285d3df2/tinycss2-1.5.1.tar.gz", hash = "sha256:d339d2b616ba90ccce58da8495a78f46e55d4d25f9fd71dfd526f07e7d53f957", size = 88195, upload-time = "2025-11-23T10:29:10.082Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/60/45/c7b5c3168458db837e8ceab06dc77824e18202679d0463f0e8f002143a97/tinycss2-1.5.1-py3-none-any.whl", hash = "sha256:3415ba0f5839c062696996998176c4a3751d18b7edaaeeb658c9ce21ec150661", size = 28404, upload-time = "2025-11-23T10:29:08.676Z" },
+]
+
+[[package]]
+name = "toml"
+version = "0.10.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/be/ba/1f744cdc819428fc6b5084ec34d9b30660f6f9daaf70eead706e3203ec3c/toml-0.10.2.tar.gz", hash = "sha256:b3bda1d108d5dd99f4a20d24d9c348e91c4db7ab1b749200bded2f839ccbe68f", size = 22253, upload-time = "2020-11-01T01:40:22.204Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/44/6f/7120676b6d73228c96e17f1f794d8ab046fc910d781c8d151120c3f1569e/toml-0.10.2-py2.py3-none-any.whl", hash = "sha256:806143ae5bfb6a3c6e736a764057db0e6a0e05e338b5630894a5f779cabb4f9b", size = 16588, upload-time = "2020-11-01T01:40:20.672Z" },
 ]
 
 [[package]]
