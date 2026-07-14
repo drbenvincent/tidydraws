@@ -91,7 +91,7 @@ path = "tidydraws/__init__.py"
 pattern = '__version__ = "(?P<version>[^"]+)"'
 
 [tool.bumpver]
-current_version = "0.4.2"
+current_version = "0.4.3"
 version_pattern = "MAJOR.MINOR.PATCH"
 commit_message = "Bump version {old_version} -> {new_version}"
 commit = true
