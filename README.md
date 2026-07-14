@@ -6,7 +6,7 @@
 
 <div align="center">
 
-[![PyPI Version](https://img.shields.io/pypi/v/tidydraws)](https://pypi.org/project/tidydraws/) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT) [![Python](https://img.shields.io/pypi/pyversions/tidydraws.svg)](https://pypi.org/project/tidydraws/)
+[![PyPI Version](https://img.shields.io/pypi/v/tidydraws)](https://pypi.org/project/tidydraws/) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT) [![Python](https://img.shields.io/badge/python-3.11%20|%203.12%20|%203.13%20|%203.14-blue)](https://pypi.org/project/tidydraws/)
 
 [![CI](https://github.com/drbenvincent/tidydraws/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/drbenvincent/tidydraws/actions/workflows/ci.yml) [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff) [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
 
