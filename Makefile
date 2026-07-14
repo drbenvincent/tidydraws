@@ -60,8 +60,10 @@ clean: cleandocs
 
 # ── Release ─────────────────────────────────────────────────────────────────
 # Admin only. Bumps the version (single source: tidydraws/__init__.py),
-# re-derives uv.lock, commits, tags, and pushes. The tag push triggers the
-# release.yml workflow → GitHub Release → publish.yml → TestPyPI → PyPI.
+# re-derives uv.lock, commits, tags, and pushes. The tag push triggers both
+# release.yml (→ GitHub Release) and publish.yml (→ TestPyPI → PyPI) in
+# parallel. Note: GITHUB_TOKEN cannot trigger downstream workflows, so
+# publish.yml listens directly for the tag push.
 # Requires admin push rights to main (enforce_admins is off) and tag-push
 # rights (tag protection rule on v*).
 release-patch:
