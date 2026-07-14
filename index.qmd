@@ -16,10 +16,9 @@ A tidybayes-inspired data layer for declarative Bayesian visualisation in Python
 | [`point_interval()`](docs/examples/parameter_draws.qmd) | summarise draws | forest, ribbon, pointrange |
 
 ```{python}
-# fmt: off
 #| code-fold: true
 #| cache: true
-# fmt: on
+#| output: false
 from pathlib import Path
 import sys
 
@@ -95,7 +94,11 @@ with pm.Model(coords=coords) as model:
         progressbar=False,
     )
 
-dt.update(prior)
+    # arviz 1.0+ uses .update(), 0.x uses .extend()
+    try:
+        dt.update(prior)
+    except AttributeError:
+        dt.extend(prior)
 ```
 
 ## Use tidydraws

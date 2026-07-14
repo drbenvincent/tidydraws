@@ -78,7 +78,11 @@ with pm.Model(coords=coords) as model:
         random_seed=2030,
     )
 
-dt.update(prior)
+    # arviz 1.0+ uses .update(), 0.x uses .extend()
+    try:
+        dt.update(prior)
+    except AttributeError:
+        dt.extend(prior)
 ```
 
 ```{python}
