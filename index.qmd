@@ -16,9 +16,9 @@ A tidybayes-inspired data layer for declarative Bayesian visualisation in Python
 | [`point_interval()`](docs/examples/parameter_draws.qmd) | summarise draws | forest, ribbon, pointrange |
 
 ```{python}
-#| code-fold: true
-#| cache: true
-#| output: false
+# | code-fold: true
+# | cache: true
+# | output: false
 from pathlib import Path
 import sys
 
