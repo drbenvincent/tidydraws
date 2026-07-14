@@ -20,16 +20,19 @@ classifiers = [
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering :: Information Analysis",
     "Topic :: Scientific/Engineering :: Mathematics",
     "Topic :: Scientific/Engineering :: Visualization",
 ]
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 dependencies = [
     "polars >=0.20",
-    "arviz >=1.0",
+    "arviz >=1.0; python_version >= '3.12'",
+    "arviz >=0.23,<1.0; python_version < '3.12'",
     "xarray",
     "numpy",
     "pyarrow>=24.0.0",
@@ -59,6 +62,7 @@ dev = [
     "great-docs>=0.14.0",
     "lets-plot",
     "plotnine",
+    "pymc >=6.0.1; python_version >= '3.12'",
 ]
 
 [project.urls]
@@ -76,7 +80,7 @@ dev = [
     "pytest>=9.1.1",
     "lets-plot",
     "plotnine",
-    "pymc>=6.0.1",
+    "pymc>=6.0.1; python_version >= '3.12'",
     "pytest-cov>=7.1.0",
 ]
 

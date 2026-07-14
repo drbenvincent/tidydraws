@@ -6,7 +6,7 @@ This document explains how to set up your development environment and contribute
 ## One-Time Setup
 
 ### Prerequisites
-- Python 3.12 or higher
+- Python 3.11 or higher
 - [`uv`](https://github.com/astral-sh/uv) package manager
 
 ### Fork and clone
