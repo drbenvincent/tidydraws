@@ -21,7 +21,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeAlias
 
 import polars as pl
 import xarray as xr
@@ -33,9 +33,7 @@ logger = logging.getLogger("tidydraws")
 
 # Objects tidydraws accepts: an ``xarray.DataTree`` (arviz >=1.0) or an
 # ``arviz.InferenceData`` (arviz <1.0). Both expose groups as ``xr.Dataset``.
-# PEP 695 ``type`` statement: the rhs is lazy, so no runtime arviz import
-# is needed (``az`` is only consulted by type checkers via TYPE_CHECKING).
-type ArviZData = xr.DataTree | az.InferenceData
+ArviZData: TypeAlias = "xr.DataTree | az.InferenceData"
 
 
 def _get_group(dt: ArviZData, group: str) -> xr.Dataset:
