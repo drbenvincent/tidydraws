@@ -62,7 +62,11 @@ def simple_regression(seed: int = 2026):
             random_seed=seed + 2,
             progressbar=False,
         )
-    dt.update(prior)
+    # arviz 1.0+ uses .update(), 0.x uses .extend()
+    try:
+        dt.update(prior)
+    except AttributeError:
+        dt.extend(prior)
     return dt, observed
 
 
@@ -155,7 +159,11 @@ def varying_slopes(seed: int = 2026):
             var_names=["alpha", "beta", "sigma"],
         )
         dt = pm.sample(draws=400, tune=400, random_seed=seed, progressbar=False)
-    dt.update(prior)
+    # arviz 1.0+ uses .update(), 0.x uses .extend()
+    try:
+        dt.update(prior)
+    except AttributeError:
+        dt.extend(prior)
     return dt, observed
 
 

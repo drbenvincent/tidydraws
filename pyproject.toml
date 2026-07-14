@@ -31,8 +31,7 @@ classifiers = [
 requires-python = ">=3.11"
 dependencies = [
     "polars >=0.20",
-    "arviz >=1.0; python_version >= '3.12'",
-    "arviz >=0.23,<1.0; python_version < '3.12'",
+    "arviz",
     "xarray",
     "numpy",
     "pyarrow>=24.0.0",
@@ -67,13 +66,13 @@ dev = [
     "prek",
     "ipykernel",
     "quarto >=0.1",
-    "great-docs>=0.14.0",
+    "great-docs>=0.15.0",
     "plotnine",
     "altair>=6.2.2",
     "vegafusion>=2.0.3",
     "vegafusion-python-embed>=1.6",
     "vl-convert-python>=1.9.0",
-    "pymc >=6.0.1; python_version >= '3.12'",
+    "pymc",
 ]
 
 [project.urls]
@@ -108,7 +107,7 @@ dev = [
     "pytest>=9.1.1",
     "lets-plot",
     "plotnine",
-    "pymc>=6.0.1; python_version >= '3.12'",
+    "pymc",
     "pytest-cov>=7.1.0",
     "altair>=6.2.2",
     "vegafusion>=2.0.3",
