@@ -106,7 +106,7 @@ def test_constant_data_group_handling(synthetic_dt_with_predictions):
     # Test error on missing group
     dt_no_const = xr.DataTree()
     dt_no_const["predictions"] = dt["predictions"].to_dataset()
-    with pytest.raises(KeyError, match="constant_data_group.*not found"):
+    with pytest.raises(KeyError, match="predictions_constant_data.*not found"):
         prediction_draws(dt_no_const, newdata=None, var_name="mu")
 
 
@@ -145,7 +145,7 @@ def test_newdata_missing_group_error(synthetic_dt_with_predictions):
     dt_no_const["predictions"] = dt["predictions"].to_dataset()
     assert "predictions_constant_data" not in dt_no_const.children
 
-    with pytest.raises(KeyError, match="constant_data_group.*not found"):
+    with pytest.raises(KeyError, match="predictions_constant_data.*not found"):
         prediction_draws(dt_no_const, newdata=None, var_name="mu")
 
 

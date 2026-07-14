@@ -89,11 +89,10 @@ def synthetic_dt():
 
 def test_compare_draws_basic(synthetic_dt):
     # Test basic functionality with default groups
-    lf = compare_draws(synthetic_dt, "beta[groups]")
+    lf = compare_draws(synthetic_dt, "beta")
     df = lf
 
-    # Should have 2 * 5 * 3 * 2 (chains * draws * groups * groups) rows
-    # since we're comparing posterior and prior
+    # Should have 2 * 5 * 3 * 2 (chains * draws * groups * sources) rows
     assert df.height == 2 * 5 * 3 * 2
 
     # Check that we have the source column
@@ -108,14 +107,12 @@ def test_compare_draws_basic(synthetic_dt):
 
 
 def test_compare_draws_custom_groups(synthetic_dt):
-    # Test with custom groups including a custom group
     lf = compare_draws(
-        synthetic_dt, "beta[groups]", groups=["posterior", "prior", "prior_pred"]
+        synthetic_dt, "beta", groups=["posterior", "prior", "prior_pred"]
     )
     df = lf
 
-    # Should have 2 * 5 * 3 * 3 (chains * draws * groups * groups) rows
-    assert df.height == 2 * 5 * 3 * 3
+    # Should have 2 * 5 * 3 * 3 (chains * draws * groups * sources) rows
 
     # Check that we have the source column with correct values
     assert "source" in df.columns
@@ -128,11 +125,10 @@ def test_compare_draws_custom_groups(synthetic_dt):
 
 def test_compare_draws_multiple_vars(synthetic_dt):
     # Test with multiple variables
-    lf = compare_draws(synthetic_dt, "beta[groups]", "sigma")
+    lf = compare_draws(synthetic_dt, "beta", "sigma")
     df = lf
 
-    # Should have 2 * 5 * 3 * 2 (chains * draws * groups * groups) rows
-    assert df.height == 2 * 5 * 3 * 2
+    # Should have 2 * 5 * 3 * 2 (chains * draws * groups * sources) rows
 
     # Check that we have the expected columns
     assert "chain" in df.columns
@@ -145,7 +141,7 @@ def test_compare_draws_multiple_vars(synthetic_dt):
 
 def test_compare_draws_custom_group_name(synthetic_dt):
     # Test with custom group column name
-    lf = compare_draws(synthetic_dt, "beta[groups]", group_name="model_type")
+    lf = compare_draws(synthetic_dt, "beta", group_name="model_type")
     df = lf
 
     # Check that we have the custom group column
@@ -155,7 +151,7 @@ def test_compare_draws_custom_group_name(synthetic_dt):
 
 def test_compare_draws_eager_semantics(synthetic_dt):
     # Verify return type is pl.DataFrame (eager)
-    df = compare_draws(synthetic_dt, "beta[groups]")
+    df = compare_draws(synthetic_dt, "beta")
     assert isinstance(df, pl.DataFrame)
 
     # Eager frames expose .height directly
@@ -168,15 +164,14 @@ def test_compare_draws_error_invalid_group(synthetic_dt):
         compare_draws(synthetic_dt, "sigma", groups=["nonexistent"])
 
 
-def test_compare_draws_error_malformed_spec(synthetic_dt):
-    # Test error handling for malformed spec (should be passed through from parameter_draws)
-    with pytest.raises(ValueError, match="Malformed variable specification"):
-        compare_draws(synthetic_dt, "beta[groups")
+def test_compare_draws_error_variable_not_found(synthetic_dt):
+    with pytest.raises(KeyError, match="Variable 'missing' not found"):
+        compare_draws(synthetic_dt, "missing")
 
 
 def test_compare_draws_numerical_correctness(synthetic_dt):
     # Spot-check data integrity
-    lf = compare_draws(synthetic_dt, "beta[groups]")
+    lf = compare_draws(synthetic_dt, "beta")
     df = lf
 
     # Check some values from posterior group

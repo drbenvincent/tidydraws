@@ -1,6 +1,6 @@
 # Makefile for tidydraws development workflow
 
-.PHONY: help install test lint type-check precommit docs docs-preview cleandocs build clean
+.PHONY: help install test lint type-check precommit docs docs-preview cleandocs build clean release release-patch release-minor release-major
 
 # Help target to show available commands
 help:
@@ -14,6 +14,11 @@ help:
 	@echo "  docs-preview  - Build and serve the docs locally with live reload"
 	@echo "  cleandocs     - Remove the ephemeral great-docs/ build directory"
 	@echo "  clean         - Clean build artifacts"
+	@echo ""
+	@echo "Releasing (admin only; see CONTRIBUTING.md > Releasing):"
+	@echo "  release-patch  - Bump patch (0.4.0 -> 0.4.1) and cut a release"
+	@echo "  release-minor  - Bump minor (0.4.0 -> 0.5.0) and cut a release"
+	@echo "  release-major  - Bump major (0.4.0 -> 1.0.0) and cut a release"
 
 # Install dependencies
 install:
@@ -52,3 +57,18 @@ clean: cleandocs
 	rm -rf .pytest_cache/
 	find . -name "*.pyc" -delete
 	find . -name "__pycache__" -type d -exec rm -rf {} +
+
+# ── Release ─────────────────────────────────────────────────────────────────
+# Admin only. Bumps the version (single source: tidydraws/__init__.py),
+# re-derives uv.lock, commits, tags, and pushes. The tag push triggers the
+# release.yml workflow → GitHub Release → publish.yml → TestPyPI → PyPI.
+# Requires admin push rights to main (enforce_admins is off) and tag-push
+# rights (tag protection rule on v*).
+release-patch:
+	uv run bumpver update --patch
+
+release-minor:
+	uv run bumpver update --minor
+
+release-major:
+	uv run bumpver update --major

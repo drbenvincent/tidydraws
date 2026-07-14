@@ -4,7 +4,7 @@ description: "Fit a PyMC model, compare prior and posterior draws with compare_d
 status: stable
 ---
 
-`compare_draws()` is the prior/posterior comparison helper: it calls `parameter_draws()` once per selected group in the ArviZ `DataTree`, tags each result with a `source` column, and stacks them into a single `DataFrame`. By default it compares `posterior` against `prior`, which is the workflow most users need after fitting a PyMC model.
+`compare_draws()` is the prior/posterior comparison helper: it calls `parameter_draws()` once per selected group in the ArviZ object, tags each result with a `source` column, and stacks them into a single `DataFrame`. By default it compares `posterior` against `prior`, which is the workflow most users need after fitting a PyMC model.
 
 ## Full PyMC workflow
 
@@ -19,18 +19,9 @@ import sys
 import polars as pl
 import pymc as pm
 import tidydraws as td
-from lets_plot import (
-    LetsPlot,
-    aes,
-    facet_wrap,
-    geom_density,
-    geom_hline,
-    geom_pointrange,
-    geom_vline,
-    ggplot,
-    labs,
-    position_dodge,
-)
+import lets_plot as lp
+import plotnine as p9
+
 
 for parent in [Path.cwd(), *Path.cwd().parents]:
     helper_dir = parent / "docs" / "examples"
@@ -40,7 +31,7 @@ for parent in [Path.cwd(), *Path.cwd().parents]:
 
 from _pymc_workflow import simulate_grouped_regression
 
-LetsPlot.setup_html()
+lp.LetsPlot.setup_html()
 
 workflow = simulate_grouped_regression(seed=2026)
 observed = workflow.observed
@@ -94,77 +85,134 @@ dt.update(prior)
 dt
 ```
 
+## Use tidydraws
+
 One call stacks both sources:
 
 ```{python}
-compare = td.compare_draws(dt, "beta[groups]")
+compare = td.compare_draws(dt, "beta")
 compare.head()
 ```
 
-## Gallery
+## Plotting
 
 ### Prior vs posterior (pooled)
 
 The prior is deliberately broad; after seeing the data, the posterior concentrates around the group-specific slopes.
 
+::: {.panel-tabset}
+
+#### lets-plot
+
 ```{python}
 # | fig-cap: "Prior vs posterior density of group-specific slopes, pooled across groups."
 (
-    ggplot(compare.to_pandas(), aes("beta", fill="source"))
-    + geom_density(alpha=0.5)
-    + geom_vline(
+    lp.ggplot(compare.to_pandas(), lp.aes("beta", fill="source"))
+    + lp.geom_density(alpha=0.5)
+    + lp.geom_vline(
         data=truth.to_pandas(),
-        mapping=aes(xintercept="beta_true"),
+        mapping=lp.aes(xintercept="beta_true"),
         color="firebrick",
         linetype="dashed",
         size=0.7,
     )
-    + labs(x="beta", y="density", fill="source", title="Prior vs posterior slopes")
+    + lp.labs(x="beta", y="density", fill="source", title="Prior vs posterior slopes")
 )
 ```
 
+#### plotnine
+
+```{python}
+# | fig-cap: "Prior vs posterior density of group-specific slopes, pooled across groups."
+(
+    p9.ggplot(compare.to_pandas(), p9.aes("beta", fill="source"))
+    + p9.geom_density(alpha=0.5)
+    + p9.geom_vline(
+        data=truth.to_pandas(),
+        mapping=p9.aes(xintercept="beta_true"),
+        color="firebrick",
+        linetype="dashed",
+        size=0.7,
+    )
+    + p9.labs(x="beta", y="density", fill="source", title="Prior vs posterior slopes")
+)
+```
+
+:::
+
 ### Prior vs posterior by group
+
+::: {.panel-tabset}
+
+#### lets-plot
 
 ```{python}
 # | fig-cap: "Prior vs posterior density of group-specific slopes, faceted by group."
 (
-    ggplot(compare.to_pandas(), aes("beta", fill="source"))
-    + geom_density(alpha=0.5)
-    + geom_vline(
+    lp.ggplot(compare.to_pandas(), lp.aes("beta", fill="source"))
+    + lp.geom_density(alpha=0.5)
+    + lp.geom_vline(
         data=truth.to_pandas(),
-        mapping=aes(xintercept="beta_true"),
+        mapping=lp.aes(xintercept="beta_true"),
         color="firebrick",
         linetype="dashed",
         size=0.7,
     )
-    + facet_wrap(facets="groups", ncol=2)
-    + labs(x="beta", y="density", fill="source", title="Prior vs posterior by group")
+    + lp.facet_wrap(facets="groups", ncol=2)
+    + lp.labs(x="beta", y="density", fill="source", title="Prior vs posterior by group")
 )
 ```
+
+#### plotnine
+
+```{python}
+# | fig-cap: "Prior vs posterior density of group-specific slopes, faceted by group."
+(
+    p9.ggplot(compare.to_pandas(), p9.aes("beta", fill="source"))
+    + p9.geom_density(alpha=0.5)
+    + p9.geom_vline(
+        data=truth.to_pandas(),
+        mapping=p9.aes(xintercept="beta_true"),
+        color="firebrick",
+        linetype="dashed",
+        size=0.7,
+    )
+    + p9.facet_wrap("~groups", ncol=2)
+    + p9.labs(x="beta", y="density", fill="source", title="Prior vs posterior by group")
+)
+```
+
+:::
 
 ### Credible-interval comparison
 
 A different cut: 89% intervals per group, dodged by source. The posterior intervals contract toward the true slopes while the prior intervals remain wide.
 
 ```{python}
-# | fig-cap: "Prior vs posterior 89% credible intervals of group-specific slopes."
 ci = td.point_interval(compare, "beta", group_by=["groups", "source"], probs=(0.89,))
+```
 
+::: {.panel-tabset}
+
+#### lets-plot
+
+```{python}
+# | fig-cap: "Prior vs posterior 89% credible intervals of group-specific slopes."
 (
-    ggplot(ci.to_pandas(), aes("groups", "beta", color="source"))
-    + geom_pointrange(
-        aes(ymin="beta_lower", ymax="beta_upper"),
-        position=position_dodge(0.5),
+    lp.ggplot(ci.to_pandas(), lp.aes("groups", "beta", color="source"))
+    + lp.geom_pointrange(
+        lp.aes(ymin="beta_lower", ymax="beta_upper"),
+        position=lp.position_dodge(0.5),
         size=0.8,
     )
-    + geom_pointrange(
+    + lp.geom_pointrange(
         data=truth.to_pandas(),
-        mapping=aes("groups", "beta_true", ymin="beta_true", ymax="beta_true"),
+        mapping=lp.aes("groups", "beta_true", ymin="beta_true", ymax="beta_true"),
         color="firebrick",
         size=0.7,
     )
-    + geom_hline(yintercept=0, linetype="dashed", color="#888888")
-    + labs(
+    + lp.geom_hline(yintercept=0, linetype="dashed", color="#888888")
+    + lp.labs(
         x="group",
         y="beta (89% CrI)",
         color="source",
@@ -173,4 +221,33 @@ ci = td.point_interval(compare, "beta", group_by=["groups", "source"], probs=(0.
 )
 ```
 
-`group_name` sets the source column's name, and `groups` can compare other `DataTree` groups when needed. Next, join posterior expectations to covariates with [`prediction_draws()`](prediction_draws.qmd).
+#### plotnine
+
+```{python}
+# | fig-cap: "Prior vs posterior 89% credible intervals of group-specific slopes."
+(
+    p9.ggplot(ci.to_pandas(), p9.aes("groups", "beta", color="source"))
+    + p9.geom_pointrange(
+        p9.aes(ymin="beta_lower", ymax="beta_upper"),
+        position=p9.position_dodge(0.5),
+        size=0.8,
+    )
+    + p9.geom_pointrange(
+        data=truth.to_pandas(),
+        mapping=p9.aes("groups", "beta_true", ymin="beta_true", ymax="beta_true"),
+        color="firebrick",
+        size=0.7,
+    )
+    + p9.geom_hline(yintercept=0, linetype="dashed", color="#888888")
+    + p9.labs(
+        x="group",
+        y="beta (89% CrI)",
+        color="source",
+        title="Prior vs posterior credible intervals",
+    )
+)
+```
+
+:::
+
+`group_name` sets the source column's name, and `groups` can compare other ArviZ groups when needed. Next, join posterior expectations to covariates with [`prediction_draws()`](prediction_draws.qmd).

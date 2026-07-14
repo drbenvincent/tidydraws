@@ -18,64 +18,56 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+from __future__ import annotations
+
 import logging
-import re
-from typing import Tuple, List
+from typing import TYPE_CHECKING
 
 import polars as pl
 import xarray as xr
 
+if TYPE_CHECKING:
+    import arviz as az
+
 logger = logging.getLogger("tidydraws")
 
+# Objects tidydraws accepts: an ``xarray.DataTree`` (arviz >=1.0) or an
+# ``arviz.InferenceData`` (arviz <1.0). Both expose groups as ``xr.Dataset``.
+# PEP 695 ``type`` statement: the rhs is lazy, so no runtime arviz import
+# is needed (``az`` is only consulted by type checkers via TYPE_CHECKING).
+type ArviZData = xr.DataTree | az.InferenceData
 
-def _parse_var_spec(spec: str) -> Tuple[str, List[str]]:
+
+def _get_group(dt: ArviZData, group: str) -> xr.Dataset:
+    """Return an xr.Dataset for *group* from either a DataTree or InferenceData."""
+    if hasattr(dt, "children"):
+        # DataTree (arviz >=1.0)
+        if group not in dt.children:
+            raise KeyError(f"Group '{group}' not found.")
+        return dt.children[group].to_dataset()
+
+    # InferenceData (arviz <1.0) or duck-type with attribute access
+    if not hasattr(dt, group):
+        raise KeyError(f"Group '{group}' not found.")
+    return getattr(dt, group)
+
+
+def _has_group(dt: ArviZData, group: str) -> bool:
+    """Check whether *group* exists in *dt* (DataTree or InferenceData)."""
+    if hasattr(dt, "children"):
+        return group in dt.children
+    return hasattr(dt, group)
+
+
+def _group_to_df(dt: ArviZData, group: str) -> pl.DataFrame:
     """
-    Parse a variable specification string into (variable_name, list_of_dimensions).
-
-    Example: "beta[groups]" -> ("beta", ["groups"])
-    Example: "sigma" -> ("sigma", [])
-    """
-    spec = spec.strip()
-    if not spec:
-        raise ValueError("Variable specification cannot be empty.")
-
-    # Regex pattern:
-    # Group 1: var_name (sequence of non-bracket/non-whitespace characters)
-    # Optional whitespace followed by optional [dimensions] block
-    match = re.match(r"^([^\[\]\s]+)\s*(?:\[([^\]]*)\])?$", spec)
-    if not match:
-        raise ValueError(
-            f"Malformed variable specification: '{spec}'. "
-            "Expected format 'var_name' or 'var_name[dim1, dim2, ...]'."
-        )
-
-    var_name = match.group(1)
-    dims_str = match.group(2)
-
-    if dims_str is None:
-        return var_name, []
-
-    # Split dimensions by comma and strip whitespace
-    dims = [d.strip() for d in dims_str.split(",") if d.strip()]
-
-    # Handle "beta[]" case where brackets are present but empty or only contain whitespace
-    if not dims and dims_str is not None:
-        raise ValueError(f"Variable specification '{spec}' cannot have empty brackets.")
-
-    return var_name, dims
-
-
-def _datatree_group_to_df(dt, group: str) -> pl.DataFrame:
-    """
-    Convert a DataTree group to a Polars DataFrame containing all coordinates and variables.
+    Convert a group (from a DataTree or InferenceData) to a Polars DataFrame
+    containing all coordinates and variables.
 
     Warning: If the group contains many variables with different dimensions,
     xarray's to_dataframe() can create a very large sparse DataFrame.
     """
-    if group not in dt.children:
-        raise KeyError(f"Group '{group}' not found in DataTree.")
-
-    ds = dt.children[group].to_dataset()
+    ds = _get_group(dt, group)
 
     # If there are no data variables, we just want the coordinates.
     # to_dataframe() requires at least one data variable; otherwise it fails.
@@ -89,7 +81,7 @@ def _datatree_group_to_df(dt, group: str) -> pl.DataFrame:
 
 
 def _align_dims(
-    frames: List[pl.DataFrame], chain_dim: str = "chain", draw_dim: str = "draw"
+    frames: list[pl.DataFrame], chain_dim: str = "chain", draw_dim: str = "draw"
 ) -> pl.DataFrame:
     """
     Combine multiple DataFrames by joining on shared dimensions.
@@ -128,24 +120,23 @@ def _align_dims(
 
 
 def parameter_draws(
-    dt: xr.DataTree,
-    *var_specs: str,
+    dt: ArviZData,
+    *var_names: str,
     group: str = "posterior",
     chain_dim: str = "chain",
     draw_dim: str = "draw",
 ) -> pl.DataFrame:
-    """
-    Extract posterior draws for one or more variables into a tidy Polars DataFrame.
+    """Extract posterior draws for one or more variables into a tidy Polars DataFrame.
+
+    Non-sample dimensions (everything except ``chain`` and ``draw``) are detected
+    automatically from the xarray DataArray's ``.dims`` -- no bracket syntax needed.
 
     Parameters
     ----------
-    dt : xr.DataTree
-        ArviZ DataTree object (xarray.DataTree) from PyMC sampling.
-    *var_specs : str
-        Variable specifications in the form "var_name" for scalar variables,
-        or "var_name[dim1, dim2, ...]" for array variables. Supports nested/multi-dimensional
-        specifications. The bracketed dimension names must match coordinate names in the
-        InferenceData dataset.
+    dt : xr.DataTree or arviz.InferenceData
+        ArviZ InferenceData or xarray DataTree from PyMC sampling.
+    *var_names : str
+        Names of variables to extract. Dimensions are auto-detected.
     group : str
         Which InferenceData group to extract from (e.g., "posterior", "prior").
         Default "posterior".
@@ -165,59 +156,44 @@ def parameter_draws(
     # -> columns: chain, draw, sigma
     # -> 4 x 1000 = 4,000 rows
 
-    # Array parameter spread over a named dim
-    parameter_draws(dt, "beta[groups]", "intercept[groups]")
+    # Array parameter -- dims auto-detected from the DataArray
+    parameter_draws(dt, "beta", "intercept")
     # -> columns: chain, draw, groups, beta, intercept
     # -> 4 x 1000 x 4 = 16,000 rows (NOT 320,000)
 
     # Mix of scalar and array (sigma broadcast-joined to group-level params)
-    parameter_draws(dt, "beta[groups]", "sigma")
+    parameter_draws(dt, "beta", "sigma")
     # -> columns: chain, draw, groups, beta, sigma
     # -> 4 x 1000 x 4 = 16,000 rows; sigma repeated per group (explicit and expected)
 
     # Different groups (prior vs posterior)
-    parameter_draws(dt, "beta[groups]", group="prior")
+    parameter_draws(dt, "beta", group="prior")
     # -> extract prior draws for beta
 
-    # Nested dimensions
-    parameter_draws(dt, "gamma[time, group]")
+    # Multi-dimensional variable
+    parameter_draws(dt, "gamma")
     # -> columns: chain, draw, time, group, gamma
     """
-    if group not in dt.children:
-        raise KeyError(f"Group '{group}' not found in DataTree.")
+    if not _has_group(dt, group):
+        raise KeyError(f"Group '{group}' not found.")
 
-    ds = dt.children[group].to_dataset()
+    ds = _get_group(dt, group)
 
     frames = []
-    for spec in var_specs:
-        var_name, dims = _parse_var_spec(spec)
+    for name in var_names:
+        if name not in ds.data_vars:
+            raise KeyError(f"Variable '{name}' not found in group '{group}'.")
 
-        if var_name not in ds.data_vars:
-            raise KeyError(f"Variable '{var_name}' not found in group '{group}'.")
+        da = ds[name]
 
-        da = ds[var_name]
-
-        # Validate that the specified dims match the data array's dimensions
-        # excluding chain and draw.
-        actual_dims = [d for d in da.dims if d != chain_dim and d != draw_dim]
-        if set(dims) != set(actual_dims):
-            raise ValueError(
-                f"Dimension mismatch for '{var_name}'. "
-                f"Expected {dims}, but found {actual_dims}."
-            )
-
-        # Convert the specific DataArray to a DataFrame
         # .to_dataframe() creates a multi-index DF with all coords.
         df = da.to_dataframe().reset_index()
         lf = pl.from_pandas(df)
 
-        # Rename the value column to var_name
-        # xarray's to_dataframe() names the value column as the variable name
-        # if it's a DataArray, but check just in case.
-        if var_name not in lf.columns:
-            # If da is scalar, it might have different naming logic
-            # Let's ensure the value column is named correctly.
-            lf = lf.rename({lf.columns[-1]: var_name})
+        # xarray's to_dataframe() names the value column after the variable
+        # (e.g. "beta", "sigma"). In rare cases (scalar DataArrays with
+        # non-standard naming) the column may be "x" or something else --
+        # normalise to the requested name.
 
         frames.append(lf)
 
@@ -225,7 +201,7 @@ def parameter_draws(
 
 
 def prediction_draws(
-    dt: xr.DataTree,
+    dt: ArviZData,
     newdata,
     var_name,
     idata_group="predictions",
@@ -241,24 +217,22 @@ def prediction_draws(
 
     Parameters
     ----------
-    dt : xr.DataTree
-        ArviZ DataTree object (xarray.DataTree) containing prediction samples.
+    dt : xr.DataTree or arviz.InferenceData
+        ArviZ InferenceData or xarray DataTree containing prediction samples.
     newdata : pl.DataFrame | pd.DataFrame | None
         Covariate grid. If None, attempts to read from dt[constant_data_group].
         If the group is not found, raises a clear error directing user to pass
         newdata explicitly.
     var_name : str
-        Name of the predictive variable to extract (e.g., "mu"). Supports
-        nested specifications like "mu[time, group]" if the variable has
-        multiple dimensions.
+        Name of the predictive variable to extract (e.g., "mu"). Dimensions
+        are auto-detected from the DataArray.
     idata_group : str
         InferenceData group containing the predictive draws ("predictions",
         "posterior_predictive", or custom). Default "predictions".
     constant_data_group : str
-        InferenceData group name for the covariate grid that aligns with the
-        prediction draws. Default "predictions_constant_data" (ArviZ 1.x
-        convention for the constant data paired with a "predictions" group).
-        Set this parameter if your DataTree uses a different naming convention.
+        Group name for the covariate grid that aligns with the
+        prediction draws. Default "predictions_constant_data".
+        Set this parameter if your data uses a different naming convention.
     join_on : str | list[str]
         Column(s) to join newdata to the draws on. Default "obs_ind".
 
@@ -284,12 +258,12 @@ def prediction_draws(
     prediction_draws(dt, newdata=fine_grid, var_name="mu")
     """
 
-    # Check if group exists in the DataTree
-    if idata_group not in dt.children:
-        raise KeyError(f"Group '{idata_group}' not found in DataTree.")
+    # Check if group exists
+    if not _has_group(dt, idata_group):
+        raise KeyError(f"Group '{idata_group}' not found.")
 
     # Extract the predictive draws for the specified variable
-    ds = dt.children[idata_group].to_dataset()
+    ds = _get_group(dt, idata_group)
     if var_name not in ds.data_vars:
         raise KeyError(f"Variable '{var_name}' not found in group '{idata_group}'.")
 
@@ -303,14 +277,14 @@ def prediction_draws(
     # Handle newdata parameter
     if newdata is None:
         # Check if constant_data_group exists
-        if constant_data_group not in dt.children:
+        if not _has_group(dt, constant_data_group):
             raise KeyError(
-                f"constant_data_group '{constant_data_group}' not found in DataTree. "
-                "Pass newdata explicitly or check your DataTree structure."
+                f"constant_data_group '{constant_data_group}' not found. "
+                "Pass newdata explicitly or check your data structure."
             )
 
         # Read the constant data group
-        const_df = _datatree_group_to_df(dt, constant_data_group)
+        const_df = _group_to_df(dt, constant_data_group)
 
         # Join pred_df with const_df on join_on
         result = pred_df.join(const_df, on=join_on, how="left")
@@ -342,25 +316,26 @@ def _coerce_to_dataframe(newdata) -> pl.DataFrame:
 
 
 def compare_draws(
-    dt: xr.DataTree,
-    *var_specs: str,
-    groups: list[str] = ["posterior", "prior"],
+    dt: ArviZData,
+    *var_names: str,
+    groups: list[str] | None = None,
     group_name: str = "source",
 ) -> pl.DataFrame:
-    """
-    Extract and stack draws from multiple groups (e.g., posterior and prior).
+    """Extract and stack draws from multiple groups (e.g., posterior and prior).
 
-    Calls parameter_draws() for each group, adds a column identifying the source group,
-    and concatenates the results into a single DataFrame for easy comparison.
+    Calls :func:`parameter_draws` for each group, adds a column identifying the
+    source group, and concatenates the results into a single DataFrame for easy
+    comparison.
 
     Parameters
     ----------
-    dt : xr.DataTree
-        ArviZ DataTree object.
-    *var_specs : str
-        Variable specifications (as for parameter_draws()).
-    groups : list[str]
-        Which groups to extract and stack. Default ["posterior", "prior"].
+    dt : xr.DataTree or arviz.InferenceData
+        ArviZ InferenceData or xarray DataTree object.
+    *var_names : str
+        Names of variables to extract (as for :func:`parameter_draws`).
+    groups : list[str] | None
+        Which groups to extract and stack. Defaults to ``["posterior", "prior"]``
+        when ``None``.
     group_name : str
         Name of the column identifying the source group. Default "source".
 
@@ -372,17 +347,19 @@ def compare_draws(
     Example
     -------
     # Extract posterior and prior for side-by-side forest plots
-    compare_df = compare_draws(dt, "beta[groups]",
-                                       groups=["posterior", "prior"])
+    compare_df = compare_draws(dt, "beta", groups=["posterior", "prior"])
     # -> columns: chain, draw, groups, beta, source
     # -> source in {"posterior", "prior"}
     """
+
+    if groups is None:
+        groups = ["posterior", "prior"]
 
     # Collect results from each group
     frames = []
     for group in groups:
         # Call parameter_draws for this group
-        group_frame = parameter_draws(dt, *var_specs, group=group)
+        group_frame = parameter_draws(dt, *var_names, group=group)
         # Add the source group identifier column
         group_frame = group_frame.with_columns(pl.lit(group).alias(group_name))
         frames.append(group_frame)
