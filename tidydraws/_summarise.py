@@ -135,6 +135,12 @@ def point_interval(
             f"Available columns: {list(data.columns)}"
         )
 
+    # Boolean draws (e.g. indicator variables) are summarised as proportions,
+    # so cast to float up front. This keeps the point/ETI expressions working
+    # and avoids a cryptic ``numpy boolean subtract`` TypeError in the HDI path.
+    if data.schema[value] == pl.Boolean:
+        data = data.with_columns(pl.col(value).cast(pl.Float64))
+
     if point not in _VALID_POINT:
         raise ValueError(
             f"Unknown point type '{point}'. Must be one of {sorted(_VALID_POINT)}."

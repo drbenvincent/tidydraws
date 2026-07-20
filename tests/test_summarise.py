@@ -117,6 +117,39 @@ class TestSingleProbDefaults:
 
 
 # ---------------------------------------------------------------------------
+# Boolean draws — indicator variables summarised as proportions
+# ---------------------------------------------------------------------------
+
+
+class TestBooleanColumn:
+    @pytest.fixture
+    def bool_df(self):
+        rng = np.random.default_rng(0)
+        n = 50
+        return pl.DataFrame({
+            "chain": [0] * n,
+            "draw": list(range(n)),
+            "groups": ["A"] * n,
+            "success": rng.integers(0, 2, n).astype(bool),
+        })
+
+    def test_hdi_on_boolean(self, bool_df):
+        # HDI previously crashed with "numpy boolean subtract" on bool columns.
+        result = point_interval(bool_df, "success", group_by="groups", interval="hdi")
+        assert result.schema["success"] == pl.Float64
+
+    def test_matches_manual_float_cast(self, bool_df):
+        result = point_interval(bool_df, "success", group_by="groups", interval="hdi")
+        casted = point_interval(
+            bool_df.with_columns(pl.col("success").cast(pl.Float64)),
+            "success",
+            group_by="groups",
+            interval="hdi",
+        )
+        assert result.equals(casted)
+
+
+# ---------------------------------------------------------------------------
 # Multiple probs — column naming
 # ---------------------------------------------------------------------------
 
