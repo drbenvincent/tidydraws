@@ -1,0 +1,89 @@
+.github/ISSUE_TEMPLATE/bug.yml
+  s_8c783a84a26af3::t_5ec3466dec0c9a 1-24
+.github/ISSUE_TEMPLATE/feature.yml
+  s_8c783a84a26af3::t_3e484d58633115 1-17
+.github/constraints/minimum.txt
+  s_8c783a84a26af3::t_c933a394202e26 1-5
+.github/dependabot.yml
+  s_8c783a84a26af3::t_2592fab9f4590d 1-25
+.github/pull_request_template.md
+  s_8c783a84a26af3::t_544b86f80cd350 1-12
+.github/release.yml
+  s_8c783a84a26af3::t_e569e044c9bd0c 1-12
+.github/workflows/ci.yml
+  s_8c783a84a26af3::t_b3be1f1086529a 12,15-16,18-38,42-48,52,55-71,73-76,78-87,91,94-118
+.github/workflows/docs.yml
+  s_8c783a84a26af3::t_46e349a1f31790 5,10,14-18,21,23-25,27,29-42,46,49,51-55,63,67,70-71
+.github/workflows/maintenance.yml
+  s_8c783a84a26af3::t_c4a52208fa07bf 1,4-6,8-11,14-15,17-23,25,28-65,67-79
+.github/workflows/publish.yml
+  s_8c783a84a26af3::t_bb596030926630 3-4,11,14-16,20,22,26,30-39,41-50,52-55,58-64,66,69-72,74-79,81,83-85,88-91,93-95,99,101,103-123
+.pre-commit-config.yaml
+  s_8c783a84a26af3::t_a5ca5b036512eb 2,16,19-21,24-26,29-39
+AGENTS.md
+  s_8c783a84a26af3::t_01e901014d824c 13,16,29,49,63,78
+CONTRIBUTING.md
+  s_8c783a84a26af3::t_14905eea4c7d75 3,5,8-9,12,14,16,18,21-24,27,29,31,33,35,38-39,42,44,46,48,50,52,55-57,60,64,67-68,71,73,75,77,79,81,83
+Makefile
+  s_8c783a84a26af3::t_0eb510b7b8e697 25,29,33,37,41-45,49,53,67-68,70,72,75,78
+README.md
+  s_8c783a84a26af3::t_f395e2e30682bb 22,29
+SECURITY.md
+  s_8c783a84a26af3::t_cd6995f265e075 1-5
+great-docs.yml
+  s_8c783a84a26af3::t_5bb35923fc6ad3 55
+pyproject.toml
+  s_8c783a84a26af3::t_415b9becdce7df 3,78,90-94
+scripts/artifact_smoke.py
+  s_8c783a84a26af3::t_a681383b6b79ba 1-76
+scripts/check_artifacts.py
+  s_8c783a84a26af3::t_ef1101e56863a8 1-80
+scripts/check_compatibility.py
+  s_8c783a84a26af3::t_6eeae666fcc7be 1-101
+scripts/check_environment.py
+  s_8c783a84a26af3::t_d8a618c9ac71ff 1-40
+scripts/check_links.py
+  s_8c783a84a26af3::t_dea92ef1daf1de 1-115
+scripts/docs_kernel.py
+  s_8c783a84a26af3::t_5dd719439eddf3 1-69
+scripts/pre-bump.sh
+  s_8c783a84a26af3::t_0fb1e3808e758b 1-2,4-6
+scripts/release.py
+  s_8c783a84a26af3::t_4ab2ffb38b0df5 1-123
+scripts/verify_testpypi.py
+  s_8c783a84a26af3::t_bf670c373bb1d1 1-77
+tests/test_backend_compat.py
+  s_8c783a84a26af3::t_5cf26573ffa284 371-407
+tests/test_maintenance.py
+  s_8c783a84a26af3::t_1d918cd72246f9 1-222
+tidydraws/__init__.py
+  s_550fff03a4634a::t_ef5f2fab7129b1 23
+tidydraws/_extract.py
+  s_550fff03a4634a::t_8a2ad1df3bc8f4 70-71
+uv.lock
+  s_8c783a84a26af3::t_8f223042a45823 346-354,799-857,910-918,1172-1183,1193-1204,1301-1336,1349-1357,1641-1658,2159-2167,2310-2343,3177-3185,3320-3321,3324-3326,3328,3330,3362-3373,3386-3394,3739-3751,3929-3931,3934-3946,3951,3955-3965,3990,3993,3996-4008,4012,4016-4026,4138-4157,4336-4363
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "972ee96d2c133343f88e5a02aa68992603f004ec",
+  "prompts": {},
+  "sessions": {
+    "s_550fff03a4634a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a553-9f5d-79b2-a4f6-69a7a7a43c1d",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Benjamin T. Vincent <inferencelab@gmail.com>"
+    },
+    "s_8c783a84a26af3": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a57e-6557-7f52-ae1d-4a0a4870cf4b",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Benjamin T. Vincent <inferencelab@gmail.com>"
+    }
+  }
+}
