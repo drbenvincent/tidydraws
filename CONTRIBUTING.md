@@ -1,178 +1,83 @@
 # Contributing to tidydraws
 
-Welcome to the tidydraws project! We're excited that you're interested in contributing.
-This document explains how to set up your development environment and contribute to this project.
+## Set up a checkout
 
-## One-Time Setup
-
-### Prerequisites
-- Python 3.11 or higher
-- [`uv`](https://github.com/astral-sh/uv) package manager
-
-### Fork and clone
+Install [uv](https://docs.astral.sh/uv/) (CI uses 0.13.7) and Python 3.12. Clone your fork and run:
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/tidydraws.git
-cd tidydraws
+uv sync --locked --group docs
+uv run prek install
 ```
 
-### Install dependencies
+The default `dev` group includes the `test`, `lint`, and `build` groups plus bumpver. The optional `docs` group adds Great Docs, ipykernel, PyMC and plotting libraries. Consumer extras remain `letsplot`, `plotnine`, `altair`, and `all`; development tools are dependency groups rather than a published `dev` extra. For core tests only, use `uv sync --locked --no-default-groups --group test` and `uv run --no-sync pytest`.
+
+For each new session, run `uv sync --locked --group docs`. A stale lock must fail rather than be silently regenerated. When changing dependencies intentionally, use `uv lock --upgrade-package PACKAGE` (or `uv lock --upgrade`), inspect the lock diff, and sync again. Keep ArviZ unpinned as agreed in #26; runtime dependency reductions belong to #38.
+
+## Make a change
+
+Create a branch from `main`, add a reproducer or meaningful regression test, and run:
 
 ```bash
-uv sync --all-extras
+make precommit
+make test
+make type-check
+make build
 ```
 
-This installs all runtime and dev dependencies (pytest, ruff, mypy, great-docs, etc.) and optional plotting libraries.
+`make precommit` is required before every commit. The local Ruff and mypy hooks run the locked project tools with real dependencies; mypy checks the whole package even for configuration-only changes. Workflow changes also run zizmor, whose exit status blocks findings. The remaining remote hooks cover whitespace, YAML/TOML, merge markers, file size and license headers. To refresh those revisions, run `uv run prek autoupdate`, review the diff and rerun `make precommit`; Dependabot updates Actions and uv dependencies, not remote hook revisions.
 
-### Install pre-commit hooks (optional but recommended)
+CI explicitly tests Linux on Python 3.11–3.14 and macOS/Windows on Python 3.12. The locked 3.11 leg asserts real legacy ArviZ `InferenceData`; modern legs assert ArviZ 1+ and DataTree. Each leg checks dependency consistency and the suite's 80% coverage floor, and uploads coverage XML. The stable `Tests` aggregate fails if any matrix leg fails. `Lock freshness`, `Lint and types`, `Workflow security`, `Build Docs`, and `Artifact validation` are the other intended required statuses.
 
-```bash
-uv run pre-commit install
-```
-
-## Starting a New Session
-
-Each time you start a new development session, sync your environment to pick up any dependency changes:
-
-```bash
-uv sync --all-extras
-```
-
-Pre-commit hooks persist across sessions — no need to reinstall unless `.pre-commit-config.yaml` changes.
-
-### Upgrading a single dependency
-
-To update a specific package (e.g. `great-docs`) to its latest allowed version:
-
-```bash
-uv sync --all-extras --upgrade-package great-docs
-```
-
-The `--upgrade-package` flag updates the lock file resolution for that package only (respecting the version constraint in `pyproject.toml`). `--all-extras` is required because several dev dependencies — including `great-docs` — are listed under `[project.optional-dependencies] dev` rather than in the `[dependency-groups]` section, so a bare `uv sync` would resolve the upgrade but skip installing them.
-
-To upgrade every dependency to the latest compatible version:
-
-```bash
-uv sync --all-extras --upgrade
-```
-
-To upgrade the lock file without touching `.venv` (e.g. to inspect what changed):
-
-```bash
-uv lock --upgrade-package great-docs
-```
-
-After upgrading, run `make install` (which wraps `uv sync --all-extras`) to install any newly resolved packages.
-
-## Common Dev Commands
-
-Run tests:
-```bash
-uv run pytest
-```
-
-Lint code:
-```bash
-uv run ruff check .
-```
-
-Type check:
-```bash
-uv run mypy .
-```
+`make build` builds both distributions, checks metadata with twine, then installs each into a separate clean uv environment and runs outside the checkout with isolated Python. It checks the installed module path, distribution/package version, four public exports, extraction/summary row counts and each plotting extra. Only validated files are copied to `.scratch/dist/`. No PyPI credentials or release are needed.
 
 ## Documentation
 
-We use [Great Docs](https://posit-dev.github.io/great-docs/) (which wraps Quarto) for the documentation site. A single `great-docs.yml` at the repo root controls the build: it wires up the API reference, the narrative tutorials under `docs/user_guide/`, and the worked examples under `docs/examples/`.
+Install the [Quarto CLI](https://quarto.org/docs/get-started/) separately (CI uses 1.9.38), then run:
 
-### Building Documentation Locally
+```bash
+make docs
+make docs-preview
+```
 
-1. Build the site (output goes to the ephemeral `great-docs/_site/` directory):
-   ```bash
-   uv run great-docs build      # or: make docs
-   ```
+Both commands register `python3` in a checkout-owned `.scratch/jupyter/` kernelspec, verify its `argv[0]` matches the project interpreter, and set `JUPYTER_PATH` and `QUARTO_PYTHON` for the build. They do not overwrite a user kernel. Re-running after an environment replacement refreshes the registration. `make docs` verifies nonempty `llms.txt`, `llms-full.txt` and `skill.md` outputs.
 
-2. Preview locally with live reload at http://localhost:3000:
-   ```bash
-   uv run great-docs preview    # or: make docs-preview
-   ```
+Great Docs builds from `great-docs.yml`, `index.qmd`, docstrings and `docs/examples/` into the disposable `great-docs/_site/`. Edit those sources, never generated files. CI executes all examples from a fresh checkout with no restored execution cache or frozen output; local execution caches can be cleared with `make cleandocs`. A manual docs run deploys only on `main` with `deploy: true`; trusted pushes to `main` deploy automatically. A manual `deploy: false` run builds only.
 
-3. See what API symbols Great Docs can discover:
-   ```bash
-   uv run great-docs scan --verbose
-   ```
+The `.agents/skills/` Great Docs skills are pinned by `skills-lock.json`. Refresh them with `npx skills add https://posit-dev.github.io/great-docs/`, review the changes, and validate the build.
 
-The `great-docs/` directory is **ephemeral** — it is regenerated on every build and is git-ignored. Never edit files inside it directly; change `great-docs.yml` or the source `.qmd` files under `docs/` instead. To clear it, run `make cleandocs`.
+## Dependency maintenance
 
-### Agent skills for the docs
+Dependabot opens weekly grouped Actions updates and at most three uv dependency PRs, with development minor/patch updates grouped. The three-day cooldown applies to version updates; security updates remain immediate. Review scientific-stack upgrades individually when their compatibility is uncertain. The maintainer (@drbenvincent) owns dependency alerts and weekly maintenance failures.
 
-This repo ships the [Great Docs Agent Skills](https://posit-dev.github.io/great-docs/) under `.agents/skills/` (`great-docs`, `configure-site`, `write-user-guide`, `revise-docstrings`, `author-skills`), pinned via `skills-lock.json`. AI coding agents working on the docs pick these up automatically; you do not need to install anything. To refresh them against upstream, run `npx skills add https://posit-dev.github.io/great-docs/` from the repo root and commit the result.
+The weekly/manual `Weekly maintenance` workflow resolves fresh dependencies in disposable uv environments without rewriting `uv.lock`, tests the declared runtime lower bounds from `.github/constraints/minimum.txt`, and crawls the published docs with bounded retries. The only fragment exemptions are four API fragments emitted without matching IDs by Great Docs 0.15; their destination pages are still checked. Unbounded dependencies resolve normally; the lower-bound constraints must track declared floors. Latest-resolution checks also import representative docs/plotting tools. Reproduce locally with:
 
-## Making Changes
+```bash
+uv run python scripts/check_compatibility.py
+uv run python scripts/check_compatibility.py --lowest
+uv run python scripts/check_links.py
+```
 
-1. Create a feature branch from `main`:
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
-
-2. Make your changes following the project's coding style and maintain compatibility.
-
-3. Add tests for your changes where appropriate.
-
-4. Run all checks before committing:
-   ```bash
-   uv run pytest
-   uv run ruff check .
-   uv run mypy .
-   ```
-
-5. Commit your changes with a descriptive message.
-
-6. Push to your fork and create a pull request.
-
-## Pull Request Guidelines
-
-- Reference relevant issues in your PR description
-- Ensure all tests pass
-- Add or update documentation as needed
-- Keep changes focused and atomic
+A failed run creates or updates one open `Weekly maintenance failure` issue with the run link and failed jobs. The maintainer investigates, links a repair PR, reruns the workflow, and closes the tracking issue after success. Successful unchanged runs stay quiet. This notification uses the workflow token, including for manually triggered runs on `main`.
 
 ## Releasing
 
-Releases are cut by a repo admin running a single `make` target. The version lives in one place — `tidydraws/__init__.py` (`__version__`) — and is read dynamically by hatchling at build time, so `pyproject.toml` never carries a version literal.
-
-### To cut a release (admin only)
+An authorized maintainer releases from a clean, up-to-date `main` checkout with one command:
 
 ```bash
-make release-patch   # 0.4.0 -> 0.4.1
-make release-minor   # 0.4.0 -> 0.5.0
-make release-major   # 0.4.0 -> 1.0.0
+make release-patch
+# or: make release-minor / make release-major
 ```
 
-This runs `bumpver`, which:
+The command verifies branch, cleanliness, remote alignment and lock freshness, then bumpver updates the package and configured version. Its pre-commit hook refreshes the lock and runs hooks, tests, artifact validation and docs before the bump commit, tag and push. Failure stops the release with an error; inspect any local version edits before retrying. The published 0.4.3 tag is retained; `main`'s version fields are reconciled to 0.4.3 without retagging.
 
-1. Bumps `__version__` in `tidydraws/__init__.py` (the only version literal in the repo).
-2. Runs `scripts/pre-bump.sh`, which re-derives `uv.lock` and stages it so the lockfile lands in the same commit.
-3. Commits with message `Bump version 0.4.0 -> 0.5.0`.
-4. Creates and pushes tag `0.5.0`.
+The numeric tag push triggers `publish.yml`. It verifies tag/version agreement and ancestry on `main`, reruns release validation on that exact commit, and builds/checks the distributions. OIDC trusted publishing uploads them to TestPyPI. Verification retrieves the exact version's wheel from TestPyPI, requires its hash to equal the validated wheel, and tests its installation; dependencies come separately from PyPI. Only successful verification allows automatic production PyPI upload, followed by the GitHub Release with generated notes. No approval click, release PR, manual version edit or extra release command is part of a successful run.
 
-The tag push then triggers the automated cascade:
+Per-tag concurrency serializes publication, with cancellation disabled. `skip-existing` supports retries and TestPyPI verification rejects a conflicting existing wheel. A manual run on the same tag retries the pipeline; PRs and manual branch runs only validate artifacts. There is no downstream release-event trigger to race the tag workflow.
 
-```mermaid
-flowchart LR
-    A[make release-minor] --> B[bumpver: bump, lock, commit, tag, push]
-    B --> C[release.yml: GitHub Release]
-    C --> D[publish.yml: build sdist+wheel]
-    D --> E[TestPyPI + verify install]
-    E --> F[PyPI upload — gated by release environment review]
-```
+### Repository settings and activation
 
-The final PyPI upload runs in the `release` [environment](https://docs.github.com/en/actions/deployment/targeting-different-environments/using-environments-for-deployment), which requires admin approval in the Actions UI. Nothing reaches PyPI without that click.
+GitHub settings are separate from YAML. The audit on 4 November 2026 found no required status checks on `main`, zero required approvals, administrator bypass enabled, and a `release` environment with no manual reviewers or branch/tag restrictions. The existing `protect-release-tags` ruleset protects numeric tags with a narrowly configured maintainer user bypass; preserve it. Do not claim merge enforcement until the new statuses have run and are configured.
 
-### Permissions and gating
+After a representative PR passes, the maintainer must require the stable statuses listed above, with an up-to-date branch requirement. Keep zero mandatory approvals for the solo-maintainer workflow and the deliberate administrator bypass needed to push the validated release bump directly to `main`. Ordinary contributors must use PRs and pass required checks. Verify a deliberately failing check prevents an ordinary merge. Restrict the `release` environment to numeric version tags with no human reviewers, preserve the trusted publisher's `publish.yml`/`release` identity, and inspect the live API/UI after activation. Test the automatic flow with the release harness and a non-production rehearsal before relying on it. Never reuse/move an existing version tag.
 
-- **Admin direct-push to `main`**: `enforce_admins` is off, so admins can push the bump commit directly. Non-admin collaborators still need a PR.
-- **Tag protection**: only admins can push version tags (e.g. `0.5.0`), so only admins can trigger a release.
-- **PyPI environment**: the `release` environment requires admin review before upload.
-
-Non-admin collaborators and external contributors cannot cut releases at any stage.
+Dependency alerts, automated security fixes and private vulnerability reporting were enabled and verified through the live API during this change. Required-check activation, release-environment tag restrictions, representative remote CI, successful manual maintenance runs and actual Dependabot PRs remain rollout evidence to collect after these workflows are published. A passing local build does not establish those settings.

@@ -1,0 +1,17 @@
+name: Feature request
+description: Describe a missing capability
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem and intended result
+    validations:
+      required: true
+  - type: textarea
+    id: example
+    attributes:
+      label: Example API or workflow
+      description: Include alternatives or related issues when useful.
+    validations:
+      required: true

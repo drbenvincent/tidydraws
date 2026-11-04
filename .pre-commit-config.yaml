@@ -1,6 +1,5 @@
 # Pre-commit hooks run via `prek` (a fast, pre-commit-compatible runner).
-# CI mirrors local behaviour: `uv run prek run --all-files` (pushes) or
-# `uv run prek run --from-ref BASE --to-ref HEAD` (PRs).
+# CI and local checks run `make precommit` on all files.
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
@@ -14,22 +13,30 @@ repos:
       - id: check-merge-conflict
       - id: check-added-large-files
         args: ["--maxkb=1500"]
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.12
+  - repo: local
     hooks:
       - id: ruff
+        name: Ruff (locked project environment)
+        language: system
+        entry: uv run --locked ruff check --fix
         types_or: [python, pyi, jupyter]
-        args: [--fix]
       - id: ruff-format
-        types_or: [python, pyi, jupyter, text]
+        name: Ruff format (locked project environment)
+        language: system
+        entry: uv run --locked ruff format
         files: \.(py|pyi|ipynb|qmd)$
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.15.0
-    hooks:
       - id: mypy
-        args: [--ignore-missing-imports]
-        files: ^tidydraws/
-        additional_dependencies: [numpy>=1.20, pandas-stubs, polars]
+        name: mypy (whole package, real dependencies)
+        language: system
+        entry: uv run --locked mypy tidydraws
+        pass_filenames: false
+        always_run: true
+      - id: workflows
+        name: Workflow security (zizmor)
+        language: system
+        entry: uv run --locked zizmor --offline .github/workflows
+        pass_filenames: false
+        files: ^\.github/(workflows/|dependabot\.yml)
   - repo: https://github.com/Lucas-C/pre-commit-hooks
     rev: v1.5.5
     hooks:

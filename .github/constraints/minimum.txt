@@ -1,0 +1,5 @@
+# Exact declared runtime floors; unbounded dependencies resolve normally.
+# Keep in step with pyproject.toml. This does not pin consumers or the main lock.
+polars==0.20.0
+pyarrow==24.0.0
+vegafusion-python-embed==1.6.0

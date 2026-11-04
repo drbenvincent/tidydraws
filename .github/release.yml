@@ -1,0 +1,12 @@
+changelog:
+  exclude:
+    labels: [no releasenotes]
+  categories:
+    - title: Fixes
+      labels: [bug]
+    - title: Features
+      labels: [enhancement]
+    - title: Documentation
+      labels: [documentation]
+    - title: Maintenance and other changes
+      labels: ["*"]

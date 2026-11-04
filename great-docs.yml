@@ -52,7 +52,7 @@ seo:
 
 # Jupyter kernel for executable code cells in .qmd pages (incl. auto-generated
 # API reference). Override per-page in frontmatter if needed.
-jupyter: tidydraws
+jupyter: python3
 
 # Social media cards -----------------------------------------------------------
 include_in_header:

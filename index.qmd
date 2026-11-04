@@ -145,7 +145,6 @@ p_pred = (
     + lp.labs(x="x", y="mu", color="group", fill="group", title="Predictive fit")
 )
 g = lp.gggrid([p_forest, p_density, p_compare, p_pred], ncol=2)
-lp.ggsave(g, "index-plot.png", path="../docs/assets", scale=1.5)
 g
 ```
 

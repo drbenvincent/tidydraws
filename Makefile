@@ -22,31 +22,35 @@ help:
 
 # Install dependencies
 install:
-	uv sync --all-extras
+	uv sync --locked --group docs
 
 # Run tests
 test:
-	uv run pytest
+	uv run --locked pytest
 
 # Lint code with ruff
 lint:
-	uv run ruff check .
+	uv run --locked ruff check .
 
 # Type check with mypy
 type-check:
-	uv run mypy tidydraws
+	uv run --locked mypy tidydraws
 
 # Run pre-commit hooks via prek
 precommit:
-	uv run prek run --all-files
+	uv run --locked prek run --all-files
+
+# Build and validate both distributions in isolated consumer environments
+build:
+	uv run --locked python scripts/check_artifacts.py
 
 # Build the documentation site into the ephemeral great-docs/_site/ directory
 docs:
-	uv run great-docs build
+	uv run --locked --group docs python scripts/docs_kernel.py great-docs build
 
 # Build and serve the docs locally with live reload (http://localhost:3000)
 docs-preview:
-	uv run great-docs preview
+	uv run --locked --group docs python scripts/docs_kernel.py great-docs preview
 
 # Remove the ephemeral great-docs build directory (regenerated on every build)
 cleandocs:
@@ -60,17 +64,15 @@ clean: cleandocs
 
 # ── Release ─────────────────────────────────────────────────────────────────
 # Admin only. Bumps the version (single source: tidydraws/__init__.py),
-# re-derives uv.lock, commits, tags, and pushes. The tag push triggers both
-# release.yml (→ GitHub Release) and publish.yml (→ TestPyPI → PyPI) in
-# parallel. Note: GITHUB_TOKEN cannot trigger downstream workflows, so
-# publish.yml listens directly for the tag push.
+# re-derives uv.lock, validates, commits, tags, and pushes. The tag push
+# starts publish.yml: validate → TestPyPI → verify → PyPI → GitHub Release.
 # Requires admin push rights to main (enforce_admins is off) and tag-push
-# rights (tag protection rule on v*).
+# rights (tag protection rule on [0-9]*).
 release-patch:
-	uv run bumpver update --patch
+	uv run --locked --group docs python scripts/release.py patch
 
 release-minor:
-	uv run bumpver update --minor
+	uv run --locked --group docs python scripts/release.py minor
 
 release-major:
-	uv run bumpver update --major
+	uv run --locked --group docs python scripts/release.py major

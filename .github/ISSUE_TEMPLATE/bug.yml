@@ -1,0 +1,24 @@
+name: Bug report
+description: Report unexpected results or an error
+labels: [bug]
+body:
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Minimal reproducer
+      description: Include data construction, calls and exact row counts or error output.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Python, tidydraws, ArviZ, xarray and Polars versions; operating system.
+    validations:
+      required: true

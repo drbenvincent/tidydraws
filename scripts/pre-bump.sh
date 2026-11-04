@@ -1,7 +1,6 @@
-#!/bin/bash
-# bumpver pre_commit_hook: re-derive uv.lock from the new __version__ and
-# stage it so the version bump, lockfile, and tag all land in one commit.
-# See https://brtkwr.com/posts/2026-01-14-bumpver-with-uv/ for the rationale.
+#!/usr/bin/env bash
+# bumpver calls this after editing the version fields, before committing/tagging.
 set -euo pipefail
-uv lock
-git add uv.lock
+# bumpver drains stdout before stderr; keep validation on a single pipe.
+exec 2>&1
+exec uv run --no-sync python scripts/release.py post-bump
