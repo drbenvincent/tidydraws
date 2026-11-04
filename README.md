@@ -19,13 +19,14 @@
 
 > A tidybayes-inspired data layer for declarative Bayesian visualisation in Python
 
-`tidydraws` turns MCMC output (ArviZ) into tidy Polars frames that are ready to plot — one `.to_pandas()` away from any ggplot-like backend. It does no plotting itself. Three functions, three spaces:
+`tidydraws` turns MCMC output (ArviZ) into tidy Polars frames that are ready to plot — one `.to_pandas()` away from any ggplot-like backend. It does no plotting itself. Four functions cover extraction and summary:
 
 | Function | Space | Plot archetype |
 | --- | --- | --- |
 | [`parameter_draws()`](https://drbenvincent.github.io/tidydraws/docs/examples/parameter_draws.html) | parameter | density, forest, scatter |
 | [`prediction_draws()`](https://drbenvincent.github.io/tidydraws/docs/examples/prediction_draws.html) | prediction | ribbon + line, fit + data |
 | [`compare_draws()`](https://drbenvincent.github.io/tidydraws/docs/examples/compare_draws.html) | comparison | prior vs posterior, intervals |
+| [`point_interval()`](https://drbenvincent.github.io/tidydraws/reference/point_interval.html) | summary | point estimates and uncertainty intervals |
 
 ![tidydraws example](https://raw.githubusercontent.com/drbenvincent/tidydraws/main/docs/assets/index-plot.png)
 

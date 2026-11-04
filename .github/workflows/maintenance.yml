@@ -1,0 +1,79 @@
+name: Weekly maintenance
+
+on:
+  schedule:
+    - cron: "23 6 * * 1"
+  workflow_dispatch:
+
+permissions: {}
+concurrency:
+  group: weekly-maintenance
+  cancel-in-progress: false
+
+jobs:
+  compatibility:
+    name: Dependency compatibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        resolution: [latest, lowest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.13.7"
+          python-version: "3.12"
+          enable-cache: false
+      - run: uv run --no-project python scripts/check_compatibility.py $LOWEST
+        env:
+          LOWEST: ${{ matrix.resolution == 'lowest' && '--lowest' || '' }}
+
+  links:
+    name: Published documentation links
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.13.7"
+          python-version: "3.12"
+          enable-cache: false
+      - run: uv run --no-project python scripts/check_links.py
+
+  notify:
+    name: Maintenance failure notification
+    needs: [compatibility, links]
+    if: >-
+      always() && github.ref == 'refs/heads/main' &&
+      (needs.compatibility.result == 'failure' || needs.links.result == 'failure')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Update one tracking issue with the failed run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          COMPATIBILITY: ${{ needs.compatibility.result }}
+          LINKS: ${{ needs.links.result }}
+        run: |
+          body="Weekly maintenance failed: dependency compatibility=$COMPATIBILITY; published links=$LINKS. Investigate the failing job: $RUN_URL. Maintainer: @drbenvincent."
+          number=$(gh issue list --state open --search '"Weekly maintenance failure" in:title' --json number --jq '.[0].number // empty')
+          if [ -n "$number" ]; then
+            gh issue edit "$number" --body "$body"
+          else
+            gh issue create --title "Weekly maintenance failure" --body "$body"
+          fi

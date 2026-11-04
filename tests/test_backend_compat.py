@@ -368,3 +368,40 @@ class TestPredictionDrawsCompat:
         result = prediction_draws(prediction_backend, newdata=newdata, var_name="mu")
         assert result.height == 2 * 5 * 20
         assert "mu" in result.columns
+
+
+@pytest.mark.parametrize("backend", ["datatree", "inferencedata", "real_inferencedata"])
+@pytest.mark.parametrize("auxiliary_coord", [False, True])
+def test_coordinate_only_prediction_data(backend, auxiliary_coord):
+    """Coordinate-only grids keep exactly one covariate row per observation."""
+    coords = {"obs_ind": [10, 20]}
+    if auxiliary_coord:
+        coords["x"] = ("obs_ind", [1.5, 2.5])
+    constant = xr.Dataset(coords=coords)
+    predictions = xr.Dataset(
+        {"mu": (("chain", "draw", "obs_ind"), np.arange(12).reshape(2, 3, 2))},
+        coords={"chain": [0, 1], "draw": [0, 1, 2], "obs_ind": [10, 20]},
+    )
+    groups = {"predictions": predictions, "predictions_constant_data": constant}
+    if backend == "datatree":
+        data = xr.DataTree.from_dict(groups)
+    elif backend == "real_inferencedata":
+        if not _LEGACY_ARVIZ:
+            pytest.skip("requires arviz<1.0 (real az.InferenceData)")
+        # ArviZ drops coordinate-only datasets at construction. Create the
+        # real group first, then remove its data variable to exercise this case.
+        data = _make_real_inferencedata(
+            predictions=predictions,
+            predictions_constant_data=constant.assign(_placeholder=("obs_ind", [0, 0])),
+        )
+        data.predictions_constant_data = data.predictions_constant_data.drop_vars(
+            "_placeholder"
+        )
+    else:
+        data = _InferenceDataMock(**groups)
+    result = prediction_draws(data, None, "mu").sort(["chain", "draw", "obs_ind"])
+    assert isinstance(result, pl.DataFrame)
+    assert result.height == 2 * 3 * 2
+    assert result["mu"].to_list() == list(range(12))
+    if auxiliary_coord:
+        assert result["x"].to_list() == [1.5, 2.5] * 6

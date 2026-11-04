@@ -67,13 +67,8 @@ def _group_to_df(dt: ArviZData, group: str) -> pl.DataFrame:
     """
     ds = _get_group(dt, group)
 
-    # If there are no data variables, we just want the coordinates.
-    # to_dataframe() requires at least one data variable; otherwise it fails.
-    if len(ds.data_vars) == 0:
-        df = ds.coords.to_dataframe().reset_index()
-    else:
-        # Convert xarray Dataset to pandas DataFrame, then to Polars DataFrame
-        df = ds.to_dataframe().reset_index()
+    # Dataset.to_dataframe also handles groups containing only coordinates.
+    df = ds.to_dataframe().reset_index()
 
     return pl.from_pandas(df)
 

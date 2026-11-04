@@ -10,10 +10,10 @@ tidydraws is a tidybayes-inspired data layer for Bayesian visualisation in Pytho
 ## Hard Rules (never violate)
 
 1. **Always return `pl.DataFrame`** from `parameter_draws()`, `prediction_draws()`, and `compare_draws()` — eager, never `pl.LazyFrame`. The data is already materialised during the xarray→pandas conversion, so wrapping it lazy would be dishonest about cost and force every plotting call through a needless `.collect()`.
-2. **String var specs only:** `"beta[groups, time]"` → `("beta", ["groups", "time"])`. No kwargs API.
+2. **String variable names only:** `parameter_draws(dt, "beta")` auto-detects dimensions from the DataArray (intentional API change in #11). Do not restore bracketed dimension specs or add a kwargs selection API.
 3. **Fail loudly on missing data.** If `prediction_draws(newdata=None)` can't find the constant data group, raise a clear, actionable error.
 4. **Support any group** (posterior, prior, custom) from day 1.
-5. **Row counts are the primary test.** `parameter_draws(dt, "beta[groups]")` must return exactly `chains × draws × groups` rows, no duplication.
+5. **Row counts are the primary test.** `parameter_draws(dt, "beta")` must return exactly `chains × draws × groups` rows, no duplication.
 6. **No star imports in docs or examples.** Import the exact plotting functions used (for example, `from lets_plot import ggplot, aes, geom_line`) so rendered examples keep an explicit namespace contract.
 7. **Run `make precommit` before every commit.** This runs prek hooks (linting, formatting, type-checking) on all modified files. Skipping it will cause CI to red — and the pre-commit hook itself if configured.
 8. **Never commit or push without the user's explicit direction or permission.** Eager commits bypass the review gate. Stage edits and wait for the user to say "commit + push" (or a variant). `Commit` is not an action you take independently — it's a handoff.
@@ -26,7 +26,7 @@ This project is managed with `uv`. Do not use `python -m venv`, `pip install` in
 
 ```bash
 # One-time: create the project venv and install everything (incl. dev deps)
-uv sync
+uv sync --locked --group docs
 
 # Run a command inside the project environment
 uv run python script.py
@@ -46,7 +46,7 @@ Key point: prefix Python/pytest commands with `uv run` so they use the project's
 
 ## Design Decisions (rationale)
 
-- **String specs** mirror R's tidybayes and handle nested dims and mixed scalar/array vars compactly.
+- **String variable names** keep selection compact; xarray supplies dimension names automatically.
 - **Eager `pl.DataFrame`, not LazyFrame.** The extraction path is `xarray.DataArray.to_dataframe()` (pandas, eager) → `pl.from_pandas()`; the data is fully in memory before any Polars object exists. A `LazyFrame` wrapper would buy nothing — predicate pushdown and streaming only help when the *source* is lazy (e.g. `scan_parquet`), which it isn't here — and would tax every plotting call with a `.collect()` step plus a `.to_pandas()` hop the backends require anyway. Eager frames are honest about the cost and a one-hop `.to_pandas()` from lets-plot/plotnine.
 - **Fail loudly** on missing data to avoid silent misalignment bugs; give the user explicit guidance.
 - **Cross-dim joins auto-join with a logged warning** (e.g. scalar `sigma` broadcast across `beta[groups]`) — common case "just works", transparently.
@@ -60,7 +60,7 @@ Key point: prefix Python/pytest commands with `uv run` so they use the project's
 
 ```python
 def parameter_draws(
-    dt, *var_specs, group="posterior", chain_dim="chain", draw_dim="draw"
+    dt, *var_names, group="posterior", chain_dim="chain", draw_dim="draw"
 ) -> pl.DataFrame: ...
 
 
@@ -75,7 +75,7 @@ def prediction_draws(
 
 
 def compare_draws(
-    dt, *var_specs, groups=["posterior", "prior"], group_name="source"
+    dt, *var_names, groups=["posterior", "prior"], group_name="source"
 ) -> pl.DataFrame: ...
 ```
 
